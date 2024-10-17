@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Tue, 8 Oct 2024 20:33:12 +0800
+Subject: [PATCH] Port to NeoForge
+
+
+diff --git a/build.gradle b/build.gradle
+index 90763a60..4b93a9ed 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,6 +1,6 @@
+ plugins {
+     id 'java-library'
+-    id 'fabric-loom' version '1.7-SNAPSHOT' apply false
++    id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
+     id "me.champeau.jmh" version "0.7.2"
+     id 'com.modrinth.minotaur' version '2.+' apply false
+     id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
+@@ -32,7 +32,7 @@ configure(allprojects) {
+     }
+ 
+     afterEvaluate {
+-        if (it.plugins.hasPlugin("fabric-loom")) {
++        if (it.plugins.hasPlugin("dev.architectury.loom")) {
+             migrateMappings.configure {
+                 outputDir = project.file("src/main/java")
+             }
+@@ -61,7 +61,7 @@ allprojects {
+ configure (allprojects - project(":tests")) {
+     if (project != project(":") && project.parent != project(":")) return
+ 
+-    apply plugin: 'fabric-loom'
++    apply plugin: 'dev.architectury.loom'
+     apply plugin: 'maven-publish'
+ 
+     dependencies {
+diff --git a/gradle.properties b/gradle.properties
+index 8106ae0c..6e0a1689 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -12,7 +12,7 @@ fabric_version=0.102.0+1.21.1
+ # Mod Properties
+ mod_version=0.3.0+alpha.0
+ maven_group=com.ishland.c2me
+-archives_base_name=c2me-fabric
++archives_base_name=c2me-neoforge
+ # Java Dependencies
+ async_util_version=0.1.0
+ night_config_version=3.6.5
+diff --git a/settings.gradle b/settings.gradle
+index 4073f255..37fe66a2 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -4,13 +4,16 @@ pluginManagement {
+             name = 'Fabric'
+             url = 'https://maven.fabricmc.net/'
+         }
++        maven { url "https://maven.architectury.dev/" }
++        maven { url "https://files.minecraftforge.net/maven/" }
++        mavenCentral()
+         gradlePluginPortal()
+     }
+ }
+ 
+ rootProject.name = "c2me" // avoid weirdness when building the project using another directory name
+ 
+-includeBuild('FlowSched') {
++includeBuild('../FlowSched') {
+     dependencySubstitution {
+         substitute module('com.ishland.flowsched:flowsched') using project(':')
+     }
+diff --git a/tests/build.gradle b/tests/build.gradle
+index 377b5f8e..93b455cc 100644
+--- a/tests/build.gradle
++++ b/tests/build.gradle
+@@ -1,6 +1,6 @@
+ allprojects {
+ //    apply plugin: 'com.ishland.curseforge.modpackresolver'
+-    apply plugin: 'fabric-loom'
++    apply plugin: 'dev.architectury.loom'
+     apply plugin: 'java-library'
+ 
+     java {
