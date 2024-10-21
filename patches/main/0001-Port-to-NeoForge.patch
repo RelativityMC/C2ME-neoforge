@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 90763a60..ad48682b 100644
+index 90763a60..1aafb614 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -82,7 +82,7 @@ index 90763a60..ad48682b 100644
          api "com.ishland.flowsched:flowsched"
      }
  }
-@@ -169,13 +167,19 @@ dependencies {
+@@ -169,13 +167,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -102,10 +102,11 @@ index 90763a60..ad48682b 100644
 +    forgeRuntimeLibrary "io.reactivex.rxjava3:rxjava:${rxjava_version}"
      include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
 +    forgeRuntimeLibrary "org.reactivestreams:reactive-streams:${reactive_streams_version}"
++    forgeRuntimeLibrary("com.ishland.flowsched:flowsched")
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -223,14 +227,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+@@ -223,14 +228,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
