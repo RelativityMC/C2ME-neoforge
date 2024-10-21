@@ -32,7 +32,7 @@ case "$1" in
 "b" | "bu" | "build")
   (
     basedir
-    cd Starlight-Patched
+    cd C2ME-fabric-patched
     ./gradlew clean build || exit 1
   )
   ;;
@@ -46,7 +46,7 @@ case "$1" in
   ;;
 "am" | "amend")
   (
-    cd "$basedir"/Starlight-Patched/
+    cd "$basedir"/C2ME-fabric-patched/
     git add .
     git commit --amend --no-edit
     cd "$basedir"
