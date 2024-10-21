@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 90763a60..4b93a9ed 100644
+index 90763a60..bfe483ce 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,7 +25,14 @@ index 90763a60..4b93a9ed 100644
              migrateMappings.configure {
                  outputDir = project.file("src/main/java")
              }
-@@ -61,7 +61,7 @@ allprojects {
+@@ -55,27 +55,24 @@ allprojects {
+                 includeGroup "com.bawnorton.mixinsquared"
+             }
+         }
++        maven { url "https://maven.neoforged.net/releases/" }
+     }
+ }
+ 
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -34,11 +41,2291 @@ index 90763a60..4b93a9ed 100644
      apply plugin: 'maven-publish'
  
      dependencies {
+         //to change the versions see the gradle.properties file
+         minecraft "com.mojang:minecraft:${project.minecraft_version}"
+-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+-        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+-
+-        [
+-                "fabric-networking-api-v1",
+-                "fabric-lifecycle-events-v1",
+-        ].forEach {
+-            modCompileOnly(fabricApi.module(it, "${project.fabric_version}"))
++        mappings loom.layered {
++            it.mappings("net.fabricmc:yarn:$project.yarn_mappings:v2")
++            it.mappings("dev.architectury:yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
+         }
++        neoForge "net.neoforged:neoforge:${project.forge_version}"
+     }
+ 
+     loom {
+@@ -96,7 +93,7 @@ configure (allprojects - project(":tests")) {
+     processResources {
+         inputs.property "version", project.version + "+" + project.minecraft_version
+ 
+-        filesMatching("fabric.mod.json") {
++        filesMatching("META-INF/neoforge.mods.toml") {
+             expand "version": project.version + "+" + project.minecraft_version
+         }
+     }
+@@ -141,7 +138,7 @@ configure (allprojects - project(":tests")) {
+ configure (allprojects - project(":tests")) {
+     dependencies {
+         implementation "com.ibm.async:asyncutil:${async_util_version}"
+-        implementation "com.electronwill.night-config:toml:${night_config_version}"
++//        implementation "com.electronwill.night-config:toml:${night_config_version}"
+         implementation "net.objecthunter:exp4j:${exp4j_version}"
+         implementation "org.jctools:jctools-core:${jctools_version}"
+         implementation annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}")
+@@ -169,8 +166,8 @@ dependencies {
+ //    includeApi project(":libs")
+ //    include project(":libs")
+     include implementation("com.ibm.async:asyncutil:${async_util_version}")
+-    include implementation("com.electronwill.night-config:toml:${night_config_version}")
+-    include implementation("com.electronwill.night-config:core:${night_config_version}")
++//    include implementation("com.electronwill.night-config:toml:${night_config_version}")
++//    include implementation("com.electronwill.night-config:core:${night_config_version}")
+     include implementation("net.objecthunter:exp4j:${exp4j_version}")
+     include implementation("org.jctools:jctools-core:${jctools_version}")
+     include implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}"))
+@@ -223,14 +220,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+ subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
+ 
+ dependencies {
+-    afterEvaluate {
+-        (subprojects - project(":tests")).forEach {
+-            if (it.parent != project(":")) return
++    (subprojects - project(":tests")).forEach {
++        if (it.parent != project(":")) return
+ 
+-            def projectName = it.name
+-            api project(path: ":${projectName}", configuration: "namedElements")
+-            include project("${projectName}:")
+-        }
++        def projectName = it.name
++        api project(path: ":${projectName}", configuration: "namedElements")
++        include project("${projectName}:")
+     }
+ }
+ 
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java b/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java
+index 0aa3ca5c..6d3e8c66 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java
+@@ -1,11 +1,19 @@
+ package com.ishland.c2me.base;
+ 
+ import com.ishland.c2me.base.common.config.ConfigSystem;
+-import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
++import net.neoforged.bus.api.IEventBus;
++import net.neoforged.fml.common.Mod;
++import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+ 
+-public class C2MEBaseMod implements PreLaunchEntrypoint {
+-    @Override
+-    public void onPreLaunch() {
++@Mod("c2me_base")
++public class C2MEBaseMod {
++
++    public C2MEBaseMod(IEventBus modEventBus) {
++        modEventBus.addListener(this::commonSetup);
++    }
++
++    private void commonSetup(FMLCommonSetupEvent event) {
+         ConfigSystem.flushConfig();
+     }
++
+ }
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+index b7653d5e..f121e7c4 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+@@ -2,8 +2,8 @@ package com.ishland.c2me.base;
+ 
+ import com.ishland.c2me.base.common.config.ConfigSystem;
+ import io.netty.util.internal.PlatformDependent;
+-import net.fabricmc.api.EnvType;
+-import net.fabricmc.loader.api.FabricLoader;
++import net.neoforged.api.distmarker.Dist;
++import net.neoforged.fml.loading.FMLEnvironment;
+ import net.objecthunter.exp4j.ExpressionBuilder;
+ import net.objecthunter.exp4j.function.Function;
+ 
+@@ -78,7 +78,7 @@ public class ModuleEntryPoint {
+                         .build()
+                         .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
+                         .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
+-                        .setVariable("is_client", FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? 1 : 0)
++                        .setVariable("is_client", FMLEnvironment.dist == Dist.CLIENT ? 1 : 0)
+                         .setVariable("cpus", Runtime.getRuntime().availableProcessors())
+                         .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
+                         .evaluate()
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
+index 480df3b6..01bed9fa 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
+@@ -3,11 +3,12 @@ package com.ishland.c2me.base.common.config;
+ import com.electronwill.nightconfig.core.CommentedConfig;
+ import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+ import com.ishland.c2me.base.common.util.BooleanUtils;
+-import net.fabricmc.loader.api.FabricLoader;
+-import net.fabricmc.loader.api.ModContainer;
+-import net.fabricmc.loader.api.Version;
+-import net.fabricmc.loader.api.metadata.CustomValue;
+-import net.fabricmc.loader.api.metadata.version.VersionPredicate;
++import net.neoforged.fml.ModContainer;
++import net.neoforged.fml.ModList;
++import net.neoforged.fml.loading.FMLConfig;
++import net.neoforged.fml.loading.FMLPaths;
++import org.apache.maven.artifact.versioning.ArtifactVersion;
++import org.apache.maven.artifact.versioning.VersionRange;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -23,7 +24,7 @@ public class ConfigSystem {
+     private static final long CURRENT_CONFIG_VERSION = 3;
+ 
+     private static final Supplier<CommentedFileConfig> configSupplier =
+-            () -> CommentedFileConfig.builder(FabricLoader.getInstance().getConfigDir().resolve("c2me.toml"))
++            () -> CommentedFileConfig.builder(FMLPaths.GAMEDIR.get().resolve(FMLConfig.defaultConfigPath()))
+                     .preserveInsertionOrder()
+                     .sync()
+                     .build();
+@@ -98,14 +99,14 @@ public class ConfigSystem {
+ 
+         public ConfigAccessor incompatibleMod(String modId, String predicate) {
+             try {
+-                final Optional<ModContainer> optional = FabricLoader.getInstance().getModContainer(modId);
++                Optional<? extends ModContainer> optional = ModList.get().getModContainerById(modId);
+                 if (optional.isPresent()) {
+                     final ModContainer modContainer = optional.get();
+-                    final Version version = modContainer.getMetadata().getVersion();
++                    final ArtifactVersion version = modContainer.getModInfo().getVersion();
+ 
+-                    final VersionPredicate versionPredicate = VersionPredicate.parse(predicate);
+-                    if (versionPredicate.test(version)) {
+-                        final String reason = String.format("Incompatible with %s@%s (%s) (defined in c2me)", modId, version.getFriendlyString(), predicate);
++                    VersionRange versionRange = VersionRange.createFromVersionSpec(predicate);
++                    if (versionRange.containsVersion(version)) {
++                        final String reason = String.format("Incompatible with %s@%s (%s) (defined in c2me)", modId, version, predicate);
+                         disableConfigWithReason(reason);
+                     }
+                 }
+@@ -250,19 +251,20 @@ public class ConfigSystem {
+         }
+ 
+         private void findModDefinedIncompatibility() {
+-            for (ModContainer modContainer : FabricLoader.getInstance().getAllMods()) {
+-                final CustomValue incompatibilitiesValue = modContainer.getMetadata().getCustomValue("c2me:incompatibleConfig");
+-                if (incompatibilitiesValue != null && incompatibilitiesValue.getType() == CustomValue.CvType.ARRAY) {
+-                    final CustomValue.CvArray incompatibilities = incompatibilitiesValue.getAsArray();
+-                    for (CustomValue value : incompatibilities) {
+-                        if (value.getType() == CustomValue.CvType.STRING && value.getAsString().equals(this.key)) {
+-                            final String reason = String.format("Incompatible with %s@%s (defined in %s)",
+-                                    modContainer.getMetadata().getId(), modContainer.getMetadata().getVersion().getFriendlyString(), modContainer.getMetadata().getId());
+-                            disableConfigWithReason(reason);
+-                        }
+-                    }
+-                }
+-            }
++            // TODO
++//            for (IModInfo modInfo : ModList.get().getMods()) {
++//                final CustomValue incompatibilitiesValue = modContainer.getMetadata().getCustomValue("c2me:incompatibleConfig");
++//                if (incompatibilitiesValue != null && incompatibilitiesValue.getType() == CustomValue.CvType.ARRAY) {
++//                    final CustomValue.CvArray incompatibilities = incompatibilitiesValue.getAsArray();
++//                    for (CustomValue value : incompatibilities) {
++//                        if (value.getType() == CustomValue.CvType.STRING && value.getAsString().equals(this.key)) {
++//                            final String reason = String.format("Incompatible with %s@%s (defined in %s)",
++//                                    modContainer.getMetadata().getId(), modContainer.getMetadata().getVersion().getFriendlyString(), modContainer.getMetadata().getId());
++//                            disableConfigWithReason(reason);
++//                        }
++//                    }
++//                }
++//            }
+ 
+         }
+ 
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ModStatuses.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ModStatuses.java
+deleted file mode 100644
+index 17eb6317..00000000
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ModStatuses.java
++++ /dev/null
+@@ -1,10 +0,0 @@
+-package com.ishland.c2me.base.common.config;
+-
+-import net.fabricmc.loader.api.FabricLoader;
+-
+-public class ModStatuses {
+-
+-    public static final boolean fabric_networking_api_v1 = FabricLoader.getInstance().isModLoaded("fabric-networking-api-v1");
+-    public static final boolean fabric_lifecycle_events_v1 = FabricLoader.getInstance().isModLoaded("fabric-lifecycle-events-v1");
+-
+-}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ClientChannelRegisterPayloadEvent.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ClientChannelRegisterPayloadEvent.java
+new file mode 100644
+index 00000000..c9a0e7c0
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ClientChannelRegisterPayloadEvent.java
+@@ -0,0 +1,19 @@
++package com.ishland.c2me.base.common.network;
++
++import net.minecraft.util.Identifier;
++import net.neoforged.bus.api.Event;
++
++import java.util.Set;
++
++public class ClientChannelRegisterPayloadEvent extends Event {
++
++    private final Set<Identifier> channels;
++
++    public ClientChannelRegisterPayloadEvent(Set<Identifier> channels) {
++        this.channels = channels;
++    }
++
++    public Set<Identifier> getChannels() {
++        return this.channels;
++    }
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
+index 39f4423e..86a58339 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
+@@ -1,23 +1,41 @@
+ package com.ishland.c2me.base.common.network;
+ 
+ import com.ishland.c2me.base.common.C2MEConstants;
+-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+ import net.minecraft.network.PacketByteBuf;
+ import net.minecraft.network.codec.PacketCodec;
+ import net.minecraft.network.packet.CustomPayload;
+ import net.minecraft.util.Identifier;
++import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
++import net.neoforged.neoforge.network.handling.DirectionalPayloadHandler;
++import net.neoforged.neoforge.network.handling.IPayloadHandler;
++
++import java.util.concurrent.CopyOnWriteArrayList;
++import java.util.concurrent.atomic.AtomicBoolean;
+ 
+ public record ExtRenderDistance(int renderDistance) implements CustomPayload {
+ 
++    private static final AtomicBoolean registered = new AtomicBoolean(false);
++    private static final CopyOnWriteArrayList<IPayloadHandler<ExtRenderDistance>> serverHandlers = new CopyOnWriteArrayList<>();
++
+     public static final PacketCodec<PacketByteBuf, ExtRenderDistance> CODEC = PacketCodec.of(ExtRenderDistance::write, ExtRenderDistance::new);
+     public static final Id<ExtRenderDistance> ID = new Id<>(Identifier.of(C2MEConstants.MODID, C2MEConstants.EXT_RENDER_DISTANCE_ID));
+ 
+-    static {
+-        PayloadTypeRegistry.configurationC2S().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
+-        PayloadTypeRegistry.playC2S().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
++    public static void register(final RegisterPayloadHandlersEvent event) {
++        if (registered.compareAndSet(false, true)) {
++            event.registrar("1").playToServer(
++                    ID,
++                    CODEC,
++                    (arg, iPayloadContext) -> {
++                        for (IPayloadHandler<ExtRenderDistance> handler : serverHandlers) {
++                            handler.handle(arg, iPayloadContext);
++                        }
++                    }
++            );
++        }
+     }
+ 
+-    public static void init() {
++    public static void registerServerHandler(final IPayloadHandler<ExtRenderDistance> handler) {
++        serverHandlers.add(handler);
+     }
+ 
+     public ExtRenderDistance(PacketByteBuf buf) {
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java
+new file mode 100644
+index 00000000..b8dc03d6
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java
+@@ -0,0 +1,23 @@
++package com.ishland.c2me.base.mixin.network;
++
++import com.ishland.c2me.base.common.network.ClientChannelRegisterPayloadEvent;
++import net.minecraft.client.network.ClientCommonNetworkHandler;
++import net.minecraft.network.packet.s2c.common.CustomPayloadS2CPacket;
++import net.neoforged.neoforge.common.NeoForge;
++import net.neoforged.neoforge.network.payload.MinecraftRegisterPayload;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++
++@Mixin(ClientCommonNetworkHandler.class)
++public class MixinClientCommonNetworkHandler {
++
++    @Inject(method = "onCustomPayload(Lnet/minecraft/network/packet/s2c/common/CustomPayloadS2CPacket;)V", at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/network/registration/NetworkRegistry;onMinecraftRegister(Lnet/minecraft/network/ClientConnection;Ljava/util/Set;)V", shift = At.Shift.AFTER))
++    private void onCustomPayloadMinecraftRegister(CustomPayloadS2CPacket packet, CallbackInfo ci) {
++        if (packet.payload() instanceof MinecraftRegisterPayload minecraftRegisterPayload) {
++            NeoForge.EVENT_BUS.post(new ClientChannelRegisterPayloadEvent(minecraftRegisterPayload.newChannels()));
++        }
++    }
++
++}
+diff --git a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..76bac433
+--- /dev/null
++++ b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,26 @@
++modLoader="javafml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_base"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Base)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''A NeoForge mod designed to improve the chunk performance of Minecraft.'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-base.mixins.json"
++
++[[dependencies.c2me_base]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
+index 0a1f33e7..f910df24 100644
+--- a/c2me-base/src/main/resources/c2me-base.mixins.json
++++ b/c2me-base/src/main/resources/c2me-base.mixins.json
+@@ -56,5 +56,8 @@
+     "theinterface.MixinStorageIoWorker",
+     "util.log4j2shutdownhookisnomore.MixinMain",
+     "util.log4j2shutdownhookisnomore.MixinMinecraftDedicatedServer"
++  ],
++  "client": [
++    "network.MixinClientCommonNetworkHandler"
+   ]
+ }
+diff --git a/c2me-base/src/main/resources/fabric.mod.json b/c2me-base/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 8feffc9a..00000000
+--- a/c2me-base/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,38 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-base",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Base)",
+-  "description": "Concurrent Chunk Management Engine Base",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-base.mixins.json"
+-  ],
+-  "entrypoints": {
+-    "preLaunch": [
+-      "com.ishland.c2me.base.C2MEBaseMod"
+-    ]
+-  },
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*"
+-  },
+-  "accessWidener": "c2me-base.accesswidener",
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
+index 46a7897a..d2f786e4 100644
+--- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
+@@ -1,10 +1,17 @@
+ package com.ishland.c2me.client.uncapvd.common;
+ 
++import com.ishland.c2me.base.common.network.ClientChannelRegisterPayloadEvent;
+ import com.ishland.c2me.base.common.network.ExtRenderDistance;
+ import net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents;
+ import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworking;
+ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+ import net.minecraft.client.MinecraftClient;
++import net.minecraft.client.network.ClientPlayNetworkHandler;
++import net.minecraft.network.NetworkPhase;
++import net.neoforged.neoforge.common.NeoForge;
++import net.neoforged.neoforge.network.PacketDistributor;
++import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
++import net.neoforged.neoforge.network.registration.NetworkRegistry;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -14,19 +21,21 @@ public class ClientExtNetworking {
+ 
+     public static final Logger LOGGER = LoggerFactory.getLogger("C2ME ClientExtNetworking");
+ 
+-    public static void sendViewDistance(int viewDistance) {
+-        if (!MinecraftClient.getInstance().isOnThread()) {
++    public static void sendViewDistance(int viewDistance, MinecraftClient client) {
++        if (!client.isOnThread()) {
+             new IllegalStateException("Tried to send packet not on client thread!").printStackTrace();
+             return;
+         }
+-        if (catchExceptions(() -> ClientPlayNetworking.canSend(ExtRenderDistance.ID))) {
++        ClientPlayNetworkHandler handler = client.getNetworkHandler();
++        if (handler == null) return;
++        if (handler.getPhase() == NetworkPhase.PLAY && NetworkRegistry.hasChannel(handler, ExtRenderDistance.ID.id())) {
+             LOGGER.info("Changing view distance to {} (play stage)", viewDistance);
+-            ClientPlayNetworking.send(new ExtRenderDistance(viewDistance));
++            PacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
+             return;
+         }
+-        if (catchExceptions(() -> ClientConfigurationNetworking.canSend(ExtRenderDistance.ID))) {
++        if (handler.getPhase() == NetworkPhase.CONFIGURATION && NetworkRegistry.hasChannel(handler, ExtRenderDistance.ID.id())) {
+             LOGGER.info("Changing view distance to {} (config stage)", viewDistance);
+-            ClientConfigurationNetworking.send(new ExtRenderDistance(viewDistance));
++            PacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
+             return;
+         }
+     }
+@@ -39,10 +48,10 @@ public class ClientExtNetworking {
+         }
+     }
+ 
+-    public static void registerListeners() {
+-        ExtRenderDistance.init();
+-        C2SPlayChannelEvents.REGISTER.register((handler, sender, client, channels) -> {
+-            if (channels.contains(ExtRenderDistance.ID.id())) {
++    public static void registerListeners(final RegisterPayloadHandlersEvent event) {
++        ExtRenderDistance.register(event);
++        NeoForge.EVENT_BUS.addListener(ClientChannelRegisterPayloadEvent.class, event1 -> {
++            if (event1.getChannels().contains(ExtRenderDistance.ID.id())) {
+                 if (Config.enableExtRenderDistanceProtocol) {
+                     LOGGER.info("Joined server with {} support", ExtRenderDistance.ID.id());
+                     MinecraftClient.getInstance().execute(() -> MinecraftClient.getInstance().options.sendClientSettings());
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/Config.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/Config.java
+index 591481f6..ac6fd1f2 100644
+--- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/Config.java
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/Config.java
+@@ -2,7 +2,6 @@ package com.ishland.c2me.client.uncapvd.common;
+ 
+ import com.ishland.c2me.base.common.C2MEConstants;
+ import com.ishland.c2me.base.common.config.ConfigSystem;
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import io.netty.util.internal.PlatformDependent;
+ 
+ public class Config {
+@@ -18,10 +17,8 @@ public class Config {
+                     Enable client-side support for extended render distance protocol (c2me:%s)
+                     This allows requesting render distances higher than 127 chunks from the server
+                     
+-                    Requires Fabric API (currently %s)
+-                    
+                     Note: The server must advertise support this protocol for this to work
+-                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID, ModStatuses.fabric_networking_api_v1 ? "available" : "unavailable"))
++                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID))
+             .getBoolean(true, false);
+ 
+     private static int getDefaultMaxVD() {
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/UncapVDInitializer.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/UncapVDInitializer.java
+index ffa79152..1a2df4d1 100644
+--- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/UncapVDInitializer.java
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/UncapVDInitializer.java
+@@ -1,15 +1,16 @@
+ package com.ishland.c2me.client.uncapvd.common;
+ 
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.client.uncapvd.ModuleEntryPoint;
+-import net.fabricmc.api.ClientModInitializer;
++import net.neoforged.bus.api.IEventBus;
++import net.neoforged.fml.common.Mod;
++import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+ 
+-public class UncapVDInitializer implements ClientModInitializer {
++@Mod("c2me_client_uncapvd")
++public class UncapVDInitializer {
+ 
+-    @Override
+-    public void onInitializeClient() {
+-        if (ModuleEntryPoint.enabled && ModStatuses.fabric_networking_api_v1) {
+-            ClientExtNetworking.registerListeners();
++    public UncapVDInitializer(IEventBus modEventBus) {
++        if (ModuleEntryPoint.enabled) {
++            modEventBus.addListener(RegisterPayloadHandlersEvent.class, ClientExtNetworking::registerListeners);
+         }
+     }
+ 
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/mixin/MixinGameOptions.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/mixin/MixinGameOptions.java
+index f0bef029..bb7587a2 100644
+--- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/mixin/MixinGameOptions.java
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/mixin/MixinGameOptions.java
+@@ -1,6 +1,5 @@
+ package com.ishland.c2me.client.uncapvd.mixin;
+ 
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.client.uncapvd.common.ClientExtNetworking;
+ import com.ishland.c2me.client.uncapvd.common.Config;
+ import net.minecraft.client.MinecraftClient;
+@@ -33,9 +32,8 @@ public abstract class MixinGameOptions {
+     @Inject(method = "sendClientSettings", at = @At("HEAD"))
+     private void beforeSendSettings(CallbackInfo ci) {
+         if (!Config.enableExtRenderDistanceProtocol) return;
+-        if (!ModStatuses.fabric_networking_api_v1) return;
+ 
+-        ClientExtNetworking.sendViewDistance(this.getSyncedOptions().viewDistance());
++        ClientExtNetworking.sendViewDistance(this.getSyncedOptions().viewDistance(), this.client);
+ 
+     }
+ 
+diff --git a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..c98ae3d9
+--- /dev/null
++++ b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,34 @@
++modLoader="javafml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = true
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_client_uncapvd"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Client/Uncap View Distance)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Client-side module for modifying maximum view distance'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-client-uncapvd.mixins.json"
++
++[[dependencies.c2me_client_uncapvd]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "CLIENT"
++
++[[dependencies.c2me_client_uncapvd]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "CLIENT"
++
+diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 5852f9a8..00000000
+--- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,38 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-client-uncapvd",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Client/Uncap View Distance)",
+-  "description": "Client-side module for modifying maximum view distance",
+-  "environment": "client",
+-  "mixins": [
+-    "c2me-client-uncapvd.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-  "entrypoints": {
+-    "client": [
+-      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
+-    ]
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..3f3101f2
+--- /dev/null
++++ b/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_fixes_chunkio_threading_issues"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Fixes/Chunk IO/Threading Issues)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Fixes threading issues related to chunk IO'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-fixes-chunkio-threading-issues.mixins.json"
++
++[[dependencies.c2me_fixes_chunkio_threading_issues]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_fixes_chunkio_threading_issues]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-fixes-chunkio-threading-issues/src/main/resources/fabric.mod.json b/c2me-fixes-chunkio-threading-issues/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 125cafc6..00000000
+--- a/c2me-fixes-chunkio-threading-issues/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-fixes-chunkio-threading-issues",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Fixes/Chunk IO/Threading Issues)",
+-  "description": "Fixes threading issues related to chunk IO",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-fixes-chunkio-threading-issues.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..317ba9cd
+--- /dev/null
++++ b/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_fixes_general_threading_issues"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Fixes/General/Threading Issues)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Fixes threading issues for general chunk storage'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-fixes-general-threading-issues.mixins.json"
++
++[[dependencies.c2me_fixes_general_threading_issues]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_fixes_general_threading_issues]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-fixes-general-threading-issues/src/main/resources/fabric.mod.json b/c2me-fixes-general-threading-issues/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index d9261cbf..00000000
+--- a/c2me-fixes-general-threading-issues/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-fixes-general-threading-issues",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Fixes/General/Threading Issues)",
+-  "description": "Fixes threading issues for general chunk storage",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-fixes-general-threading-issues.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..78b78291
+--- /dev/null
++++ b/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,40 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_fixes_worldgen_threading_issues"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Fixes/WorldGen/Threading Issues)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Fixes threading issues for vanilla world generation code'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-fixes-worldgen-threading-issues.mixins.json"
++
++[[dependencies.c2me_fixes_worldgen_threading_issues]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_fixes_worldgen_threading_issues]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_fixes_worldgen_threading_issues]]
++modId = "c2me_fixes_general_threading_issues"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-fixes-worldgen-threading-issues/src/main/resources/fabric.mod.json b/c2me-fixes-worldgen-threading-issues/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index d2ab63d0..00000000
+--- a/c2me-fixes-worldgen-threading-issues/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,34 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-fixes-worldgen-threading-issues",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Fixes/WorldGen/Threading Issues)",
+-  "description": "Fixes threading issues for vanilla world generation code",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-fixes-worldgen-threading-issues.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*",
+-    "c2me-fixes-general-threading-issues": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..c131913b
+--- /dev/null
++++ b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_fixes_worldgen_vanilla_bugs"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Fixes/WorldGen/Vanilla Bugs)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Fixes for some vanilla worldgen crashing bugs'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-fixes-worldgen-vanilla-bugs.mixins.json"
++
++[[dependencies.c2me_fixes_worldgen_vanilla_bugs]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_fixes_worldgen_vanilla_bugs]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/fabric.mod.json b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index f8c7fb82..00000000
+--- a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-fixes-worldgen-vanilla-bugs",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Fixes/WorldGen/Vanilla Bugs)",
+-  "description": "Fixes for some vanilla worldgen crashing bugs",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-fixes-worldgen-vanilla-bugs.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+index d8737977..822c62b5 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+@@ -3,7 +3,6 @@ package com.ishland.c2me.notickvd.common;
+ import com.ishland.c2me.base.common.C2MEConstants;
+ import com.ishland.c2me.base.common.GlobalExecutors;
+ import com.ishland.c2me.base.common.config.ConfigSystem;
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ 
+ public class Config {
+ 
+@@ -24,9 +23,7 @@ public class Config {
+             .comment("""
+                     Enable server-side support for extended render distance protocol (c2me:%s)
+                     This allows requesting render distances higher than 127 chunks from the server
+-                    
+-                    Requires Fabric API (currently %s)
+-                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID, ModStatuses.fabric_networking_api_v1 ? "available" : "unavailable"))
++                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID))
+             .getBoolean(true, false);
+ 
+     public static final boolean ensureChunkCorrectness = new ConfigSystem.ConfigAccessor()
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
+index e8383e1e..1fbc5006 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
+@@ -1,14 +1,18 @@
+ package com.ishland.c2me.notickvd.common;
+ 
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.notickvd.ModuleEntryPoint;
+ import net.fabricmc.api.ModInitializer;
++import net.neoforged.bus.api.IEventBus;
++import net.neoforged.fml.common.Mod;
++import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+ 
+-public class NoTickVDInitializer implements ModInitializer {
+-    @Override
+-    public void onInitialize() {
+-        if (ModuleEntryPoint.enabled && Config.enableExtRenderDistanceProtocol && ModStatuses.fabric_networking_api_v1) {
+-            ServerExtNetworking.registerListeners();
++@Mod("c2me_notickvd")
++public class NoTickVDInitializer {
++
++    public NoTickVDInitializer(IEventBus modEventBus) {
++        if (ModuleEntryPoint.enabled && Config.enableExtRenderDistanceProtocol) {
++            modEventBus.addListener(FMLCommonSetupEvent.class, event -> ServerExtNetworking.registerListeners());
+         }
+     }
++
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
+index c38cde07..02255334 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
+@@ -3,21 +3,17 @@ package com.ishland.c2me.notickvd.common;
+ import com.ishland.c2me.base.common.network.ExtRenderDistance;
+ import net.fabricmc.fabric.api.networking.v1.ServerConfigurationNetworking;
+ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
++import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+ 
+ public class ServerExtNetworking {
+ 
+-    public static void registerListeners() {
+-        ExtRenderDistance.init();
+-        ServerPlayNetworking.registerGlobalReceiver(
+-                ExtRenderDistance.ID,
+-                (payload, context) ->
+-                        ((IRenderDistanceOverride) context.player().networkHandler).c2me_notickvd$setRenderDistance(payload.renderDistance())
+-        );
+-        ServerConfigurationNetworking.registerGlobalReceiver(
+-                ExtRenderDistance.ID,
+-                (payload, context) ->
+-                        ((IRenderDistanceOverride) context.networkHandler()).c2me_notickvd$setRenderDistance(payload.renderDistance())
+-        );
++    public static void registerListeners(RegisterPayloadHandlersEvent event) {
++        ExtRenderDistance.register(event);
++        ExtRenderDistance.registerServerHandler((payload, iPayloadContext) -> {
++            if (iPayloadContext.listener() instanceof IRenderDistanceOverride iRenderDistanceOverride) {
++                iRenderDistanceOverride.c2me_notickvd$setRenderDistance(payload.renderDistance());
++            }
++        });
+     }
+ 
+ }
+diff --git a/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..3767cb79
+--- /dev/null
++++ b/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="javafml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_notickvd"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (No Tick View Distance)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''An faster alternative implementation of simulation distance supporting view distance up to 248 chunks'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-notickvd.mixins.json"
++
++[[dependencies.c2me_notickvd]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_notickvd]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-notickvd/src/main/resources/fabric.mod.json b/c2me-notickvd/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 8b87f08f..00000000
+--- a/c2me-notickvd/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,38 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-notickvd",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (No Tick View Distance)",
+-  "description": "An faster alternative implementation of simulation distance supporting view distance up to 248 chunks",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-notickvd.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-  "entrypoints": {
+-    "main": [
+-      "com.ishland.c2me.notickvd.common.NoTickVDInitializer"
+-    ]
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..e54eab96
+--- /dev/null
++++ b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_allocs"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Memory Allocations)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations related to chunk access'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-allocs.mixins.json"
++
++[[dependencies.c2me_opts_allocs]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_allocs]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-allocs/src/main/resources/fabric.mod.json b/c2me-opts-allocs/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index cb2dcf73..00000000
+--- a/c2me-opts-allocs/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-allocs",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Memory Allocations)",
+-  "description": "Optimizations for reducing memory allocations to reduce lag spikes",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-allocs.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..a97e1f0c
+--- /dev/null
++++ b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_chunk_access"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Chunk Access)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations related to chunk access'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-chunk-access.mixins.json"
++
++[[dependencies.c2me_opts_chunk_access]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_chunk_access]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-chunk-access/src/main/resources/fabric.mod.json b/c2me-opts-chunk-access/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 5bb0596d..00000000
+--- a/c2me-opts-chunk-access/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-chunk-access",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Chunk Access)",
+-  "description": "Optimizations related to chunk access",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-chunk-access.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..4bafcc83
+--- /dev/null
++++ b/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_chunkio"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Chunk IO)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations for chunk IO'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-chunkio.mixins.json"
++
++[[dependencies.c2me_opts_chunkio]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_chunkio]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-chunkio/src/main/resources/fabric.mod.json b/c2me-opts-chunkio/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 9dd0f4b3..00000000
+--- a/c2me-opts-chunkio/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-chunkio",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Chunk IO)",
+-  "description": "Optimizations for chunk IO",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-chunkio.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..aa7ae047
+--- /dev/null
++++ b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_dfc"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Density Function Compiler)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations for density functions used in world generation'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-dfc.mixins.json"
++
++[[dependencies.c2me_opts_dfc]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_dfc]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-dfc/src/main/resources/fabric.mod.json b/c2me-opts-dfc/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index a675d2c6..00000000
+--- a/c2me-opts-dfc/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-dfc",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Density Function Compiler)",
+-  "description": "Optimizations for density functions used in world generation",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-dfc.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..9361ea12
+--- /dev/null
++++ b/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_math"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Math)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations for math used in world generation'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-math.mixins.json"
++
++[[dependencies.c2me_opts_math]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_math]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-math/src/main/resources/fabric.mod.json b/c2me-opts-math/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 9889ea15..00000000
+--- a/c2me-opts-math/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-math",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Math)",
+-  "description": "Optimizations for math used in world generation",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-math.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..8edf94e1
+--- /dev/null
++++ b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,36 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_natives_math"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Natives Math)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations for math using native libraries'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-natives-math.mixins.json"
++
++[[dependencies.c2me_opts_natives_math]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_natives_math]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[features.c2me_opts_natives_math]
++javaVersion = "[22,)"
+diff --git a/c2me-opts-natives-math/src/main/resources/fabric.mod.json b/c2me-opts-natives-math/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index b90edb5c..00000000
+--- a/c2me-opts-natives-math/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,34 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-natives-math",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Natives Math)",
+-  "description": "Optimizations for math using native libraries",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-natives-math.mixins.json"
+-  ],
+-  "depends": {
+-    "java": ">=22",
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..b0a8f1d7
+--- /dev/null
++++ b/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_scheduling"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Scheduling)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Chunk scheduling optimizations'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-scheduling.mixins.json"
++
++[[dependencies.c2me_opts_scheduling]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_scheduling]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-scheduling/src/main/resources/fabric.mod.json b/c2me-opts-scheduling/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 449b2905..00000000
+--- a/c2me-opts-scheduling/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-scheduling",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Scheduling)",
+-  "description": "Chunk scheduling optimizations",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-scheduling.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..1bef8012
+--- /dev/null
++++ b/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_worldgen_general"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/General WorldGen)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations for general world generation performance'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-worldgen-general.mixins.json"
++
++[[dependencies.c2me_opts_worldgen_general]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_worldgen_general]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-worldgen-general/src/main/resources/fabric.mod.json b/c2me-opts-worldgen-general/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 3bda5df6..00000000
+--- a/c2me-opts-worldgen-general/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-worldgen-general",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/General WorldGen)",
+-  "description": "Optimizations for general world generation performance",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-worldgen-general.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..83d9bdd1
+--- /dev/null
++++ b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,40 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_opts_worldgen_vanilla"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Optimizations/Vanilla WorldGen)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Optimizations targeting vanilla world generation'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-opts-worldgen-vanilla.mixins.json"
++
++[[dependencies.c2me_opts_worldgen_vanilla]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_worldgen_vanilla]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_opts_worldgen_vanilla]]
++modId = "c2me_opts_worldgen_general"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/fabric.mod.json b/c2me-opts-worldgen-vanilla/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 0e1acdf9..00000000
+--- a/c2me-opts-worldgen-vanilla/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,34 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-worldgen-vanilla",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Vanilla WorldGen)",
+-  "description": "Optimizations targeting vanilla world generation",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-worldgen-vanilla.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*",
+-    "c2me-opts-worldgen-general": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..17096063
+--- /dev/null
++++ b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_rewrites_chunk_serializer"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Rewrites/Chunk Serializer)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, Kroppeb"
++description='''Optimizations related to chunk serialization'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-rewrites-chunk-serializer.mixins.json"
++
++[[dependencies.c2me_rewrites_chunk_serializer]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_rewrites_chunk_serializer]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/fabric.mod.json b/c2me-rewrites-chunk-serializer/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 11bb4286..00000000
+--- a/c2me-rewrites-chunk-serializer/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,38 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-rewrites-chunk-serializer",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Rewrites/Chunk Serializer)",
+-  "description": "Optimizations related to chunk serialization",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-rewrites-chunk-serializer.mixins.json"
+-  ],
+-  "entrypoints": {
+-    "main": [
+-      "com.ishland.c2me.rewrites.chunk_serializer.TheMod"
+-    ]
+-  },
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "Kroppeb"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+index 1c16af46..c1026825 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+@@ -1,6 +1,5 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.base.common.util.RxJavaUtils;
+ import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+@@ -116,7 +115,7 @@ public class ReadFromDisk extends NewChunkStatus {
+                 loadedToWorld = false;
+             }
+ 
+-            if (loadedToWorld && ModStatuses.fabric_lifecycle_events_v1 && chunk instanceof WorldChunk worldChunk) {
++            if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
+                 LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+             }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+index b4e63a8c..556db081 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+@@ -1,7 +1,6 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+ import com.ishland.c2me.base.common.GlobalExecutors;
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.base.common.registry.SerializerAccess;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
+ import com.ishland.c2me.base.common.theinterface.IDirectStorage;
+@@ -140,7 +139,7 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+                         worldChunk.setLoadedToWorld(false);
+                     }
+ 
+-                    if (loadedToWorld.get() && ModStatuses.fabric_lifecycle_events_v1 && chunk instanceof WorldChunk worldChunk) {
++                    if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
+                         LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+                     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+index 29803d74..8819ad3a 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+@@ -1,12 +1,10 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+ import com.google.common.base.Preconditions;
+-import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.base.mixin.access.IWorldChunk;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+-import com.ishland.c2me.rewrites.chunksystem.common.Config;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
+ import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
+@@ -66,9 +64,7 @@ public class ServerAccessible extends NewChunkStatus {
+                 worldChunk.setLoadedToWorld(true);
+                 worldChunk.updateAllBlockEntities();
+                 worldChunk.addChunkTickSchedulers(serverWorld);
+-                if (ModStatuses.fabric_lifecycle_events_v1) {
+-                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk);
+-                }
++                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk);
+             }
+ 
+             ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+diff --git a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..23b41ac3
+--- /dev/null
++++ b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_rewrites_chunk_system"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Rewrites/Chunk System)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''An alternative chunk system'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-rewrites-chunk-system.mixins.json"
++
++[[dependencies.c2me_rewrites_chunk_system]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_rewrites_chunk_system]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-rewrites-chunk-system/src/main/resources/fabric.mod.json b/c2me-rewrites-chunk-system/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index ba80e3de..00000000
+--- a/c2me-rewrites-chunk-system/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-rewrites-chunk-system",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Rewrites/Chunk System)",
+-  "description": "An alternative chunk system",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-rewrites-chunk-system.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..b2df9173
+--- /dev/null
++++ b/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_rewrites_chunkio"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Rewrites/Chunk IO)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''An alternative chunk IO system focused on overall throughput'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-rewrites-chunkio.mixins.json"
++
++[[dependencies.c2me_rewrites_chunkio]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_rewrites_chunkio]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-rewrites-chunkio/src/main/resources/fabric.mod.json b/c2me-rewrites-chunkio/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 2392cab3..00000000
+--- a/c2me-rewrites-chunkio/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-rewrites-chunkio",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Rewrites/Chunk IO)",
+-  "description": "An alternative chunk IO system focused on overall throughput",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-rewrites-chunkio.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml b/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..911f619f
+--- /dev/null
++++ b/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_server_utils"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Server Utils)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Some server-side utilities'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-server-utils.mixins.json"
++
++[[dependencies.c2me_server_utils]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_server_utils]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/c2me-server-utils/src/main/resources/fabric.mod.json b/c2me-server-utils/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 4af8b36b..00000000
+--- a/c2me-server-utils/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,33 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-server-utils",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Server Utils)",
+-  "description": "Some server-side utilities",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-server-utils.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
+diff --git a/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml b/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..7f2b7d2b
+--- /dev/null
++++ b/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,33 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_threading_lighting"
++version="${version}"
++displayName="Concurrent Chunk Management Engine (Threading/Lighting)"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''Makes lighting onto its dedicated thread'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config="c2me-threading-lighting.mixins.json"
++
++[[dependencies.c2me_threading_lighting]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me_threading_lighting]]
++modId = "c2me_base"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
 diff --git a/gradle.properties b/gradle.properties
-index 8106ae0c..6e0a1689 100644
+index 8106ae0c..67f39228 100644
 --- a/gradle.properties
 +++ b/gradle.properties
-@@ -12,7 +12,7 @@ fabric_version=0.102.0+1.21.1
+@@ -3,19 +3,23 @@ org.gradle.jvmargs=-Xmx3G
+ org.gradle.parallel=true
+ org.gradle.warning.mode=all
+ fabric.loom.multiProjectOptimisation=true
++
++loom.platform=neoforge
+ # Fabric Properties
+ # check these on https://fabricmc.net/versions.html
+ minecraft_version=1.21.1
+ yarn_mappings=1.21.1+build.1
+-loader_version=0.16.3
+-fabric_version=0.102.0+1.21.1
++# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
++forge_version=21.1.71
++# https://github.com/architectury/architectury-loom/issues/230
++yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
  mod_version=0.3.0+alpha.0
  maven_group=com.ishland.c2me
@@ -46,7 +2333,11 @@ index 8106ae0c..6e0a1689 100644
 +archives_base_name=c2me-neoforge
  # Java Dependencies
  async_util_version=0.1.0
- night_config_version=3.6.5
+-night_config_version=3.6.5
++#night_config_version=3.6.5
+ exp4j_version=0.4.8
+ rxjava_version=3.1.8
+ reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
 index 4073f255..37fe66a2 100644
 --- a/settings.gradle
@@ -69,11 +2360,101 @@ index 4073f255..37fe66a2 100644
      dependencySubstitution {
          substitute module('com.ishland.flowsched:flowsched') using project(':')
      }
+diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..5c09f37b
+--- /dev/null
++++ b/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,37 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me"
++version="${version}"
++displayName="Concurrent Chunk Management Engine"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++description='''A NeoForge mod designed to improve the chunk performance of Minecraft.'''
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[dependencies.c2me]]
++modId = "minecraft"
++type = "required"
++versionRange = "[1.21.1,1.21.2)"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me]]
++modId = "dynview"
++type = "discouraged"
++reason = "keeping virtually every chunk from unloading when the server is running for a whole minute or even longer"
++ordering = "NONE"
++side = "BOTH"
++
++[[dependencies.c2me]]
++modId = "betterchunkloading"
++type = "discouraged"
++reason = "causes the world to save infinitely"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 51b01a6f..00000000
+--- a/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,41 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine",
+-  "description": "A Fabric mod designed to improve the chunk performance of Minecraft.",
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "icon": "assets/c2me/icon.png",
+-  "environment": "*",
+-  "entrypoints": {
+-    "main": [
+-      "com.ishland.c2me.C2MEMod"
+-    ],
+-    "preLaunch": [
+-      "com.ishland.c2me.PreLaunchHandler"
+-    ]
+-  },
+-  "depends": {
+-    "fabricloader": ">=0.16.0",
+-    "java": ">=21",
+-    "minecraft": ">=1.21"
+-  },
+-  "conflicts": {
+-    "dynview": "*",
+-    "betterchunkloading": "*"
+-  },
+-  "breaks": {
+-    "tic_tacs": "*",
+-    "optifabric": "*"
+-  }
+-}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 377b5f8e..93b455cc 100644
+index 377b5f8e..30c77611 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
-@@ -1,6 +1,6 @@
+@@ -1,11 +1,11 @@
  allprojects {
  //    apply plugin: 'com.ishland.curseforge.modpackresolver'
 -    apply plugin: 'fabric-loom'
@@ -81,3 +2462,223 @@ index 377b5f8e..93b455cc 100644
      apply plugin: 'java-library'
  
      java {
+-        sourceCompatibility = JavaVersion.VERSION_17
+-        targetCompatibility = JavaVersion.VERSION_17
++        sourceCompatibility = JavaVersion.VERSION_21
++        targetCompatibility = JavaVersion.VERSION_21
+     }
+ 
+     group = project.maven_group + ".tests"
+@@ -25,6 +25,7 @@ allprojects {
+             url "https://www.cursemaven.com"
+             content { includeGroup "curse.maven" }
+         }
++        maven { url "https://maven.neoforged.net/releases/" }
+     }
+     loom {
+         accessWidenerPath = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
+@@ -39,18 +40,17 @@ allprojects {
+     }
+     dependencies {
+         minecraft "com.mojang:minecraft:${project.minecraft_version}"
+-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+-        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+-//        modApi 'com.github.astei:lazydfu:0.1.2'
+-//        modApi('com.github.RelativityMC:Starlight:03ab3acd94') {
+-//            transitive = false
+-//        }
++        mappings loom.layered {
++            it.mappings("net.fabricmc:yarn:$project.yarn_mappings:v2")
++            it.mappings("dev.architectury:yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
++        }
++        neoForge "net.neoforged:neoforge:${project.forge_version}"
+         implementation "com.ibm.async:asyncutil:${async_util_version}"
+     }
+     processResources {
+         inputs.property "version", project.version
+ 
+-        filesMatching("fabric.mod.json") {
++        filesMatching("META-INF/neoforge.mods.toml") {
+             expand "version": project.version
+         }
+     }
+diff --git a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/C2METestMod.java b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/C2METestMod.java
+deleted file mode 100644
+index f26cf7c2..00000000
+--- a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/C2METestMod.java
++++ /dev/null
+@@ -1,11 +0,0 @@
+-package com.ishland.c2me.tests.testmod;
+-
+-import net.fabricmc.api.ModInitializer;
+-
+-public class C2METestMod implements ModInitializer {
+-
+-    @Override
+-    public void onInitialize() {
+-
+-    }
+-}
+diff --git a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/TestMixinPlugin.java b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/TestMixinPlugin.java
+index 828b499d..3d7fd274 100644
+--- a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/TestMixinPlugin.java
++++ b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/TestMixinPlugin.java
+@@ -1,7 +1,5 @@
+ package com.ishland.c2me.tests.testmod.mixin;
+ 
+-import net.fabricmc.api.EnvType;
+-import net.fabricmc.loader.api.FabricLoader;
+ import org.objectweb.asm.tree.ClassNode;
+ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+@@ -26,10 +24,6 @@ public class TestMixinPlugin implements IMixinConfigPlugin {
+     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+         if (mixinClassName.startsWith("com.ishland.c2me.tests.testmod.mixin.pregen."))
+             return doPreGen;
+-        if (mixinClassName.startsWith("com.ishland.c2me.tests.testmod.mixin.fix.client."))
+-            return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
+-        if (mixinClassName.startsWith("com.ishland.c2me.tests.testmod.mixin.fix.remapper_being_broken."))
+-            return FabricLoader.getInstance().isDevelopmentEnvironment();
+         return true;
+     }
+ 
+diff --git a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/MixinFixDevLaunch.java b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/MixinFixDevLaunch.java
+deleted file mode 100644
+index 9979b706..00000000
+--- a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/MixinFixDevLaunch.java
++++ /dev/null
+@@ -1,30 +0,0 @@
+-package com.ishland.c2me.tests.testmod.mixin.fix;
+-
+-import net.fabricmc.loader.api.FabricLoader;
+-import org.spongepowered.asm.mixin.Dynamic;
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.Pseudo;
+-import org.spongepowered.asm.mixin.injection.At;
+-import org.spongepowered.asm.mixin.injection.Redirect;
+-
+-@Pseudo
+-@Mixin(targets = {
+-        "supercoder79.ecotones.Ecotones",
+-        "supercoder79.ecotones.util.RegistryReport",
+-        "supercoder79.ecotones.util.AiLog"
+-})
+-public class MixinFixDevLaunch {
+-
+-    @Dynamic
+-    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lnet/fabricmc/loader/api/FabricLoader;isDevelopmentEnvironment()Z", remap = false), require = 0)
+-    private boolean redirectDevEnvironment(FabricLoader unused) {
+-        return false;
+-    }
+-
+-    @Dynamic
+-    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lnet/fabricmc/loader/api/FabricLoader;isDevelopmentEnvironment()Z", remap = false), require = 0)
+-    private static boolean redirectDevEnvironmentStatic(FabricLoader unused) {
+-        return false;
+-    }
+-
+-}
+diff --git a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/remapper_being_broken/MixinGeneralUtils.java b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/remapper_being_broken/MixinGeneralUtils.java
+deleted file mode 100644
+index b886d0f5..00000000
+--- a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/mixin/fix/remapper_being_broken/MixinGeneralUtils.java
++++ /dev/null
+@@ -1,26 +0,0 @@
+-package com.ishland.c2me.tests.testmod.mixin.fix.remapper_being_broken;
+-
+-import net.minecraft.enchantment.Enchantment;
+-import net.minecraft.item.ItemStack;
+-import org.spongepowered.asm.mixin.Dynamic;
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.Pseudo;
+-import org.spongepowered.asm.mixin.injection.At;
+-import org.spongepowered.asm.mixin.injection.Redirect;
+-
+-@Pseudo
+-@Mixin(targets = "com.telepathicgrunt.repurposedstructures.utils.GeneralUtils")
+-public class MixinGeneralUtils {
+-
+-    @Dynamic
+-    @Redirect(method = "lambda$enchantRandomly$2", at = @At(value = "INVOKE", target = "Lnet/minecraft/enchantment/Enchantment;isAcceptableItem(Lnet/minecraft/item/ItemStack;)Z"), remap = false)
+-    private static boolean redirectIsAcceptableItem(Enchantment instance, ItemStack stack) {
+-        try {
+-            return instance.isAcceptableItem(stack);
+-        } catch (Throwable t) {
+-            System.err.println(t.getMessage());
+-            return false;
+-        }
+-    }
+-
+-}
+diff --git a/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml b/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..c932203a
+--- /dev/null
++++ b/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,24 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2metests"
++version="${version}"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[mixins]]
++config = "c2metests.mixins.json"
++
++[[dependencies.c2metests]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
+diff --git a/tests/test-mod/src/main/resources/c2metests.mixins.json b/tests/test-mod/src/main/resources/c2metests.mixins.json
+index 8b5ef320..4ae40613 100644
+--- a/tests/test-mod/src/main/resources/c2metests.mixins.json
++++ b/tests/test-mod/src/main/resources/c2metests.mixins.json
+@@ -9,12 +9,10 @@
+     "IServerChunkManager",
+     "IThreadedAnvilChunkStorage",
+     "MixinWorldView",
+-    "fix.MixinFixDevLaunch",
+     "fix.client.MixinEntityModelLayers",
+     "fix.client.MixinMain",
+     "fix.logspam.MixinUniformHeightProvider",
+     "fix.mem_effects.MixinIngredient",
+-    "fix.remapper_being_broken.MixinGeneralUtils",
+     "pregen.MixinCrashReport",
+     "pregen.MixinMain",
+     "pregen.MixinMinecraftDedicatedServer",
+diff --git a/tests/test-mod/src/main/resources/fabric.mod.json b/tests/test-mod/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index e71383af..00000000
+--- a/tests/test-mod/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,19 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2metests",
+-  "version": "${version}",
+-  "authors": [
+-    "ishlandbukkit",
+-    "ishland"
+-  ],
+-  "license": "MIT",
+-  "environment": "*",
+-  "entrypoints": {
+-    "main": [
+-      "com.ishland.c2me.tests.testmod.C2METestMod"
+-    ]
+-  },
+-  "mixins": [
+-    "c2metests.mixins.json"
+-  ]
+-}
