@@ -337,6 +337,21 @@ index 39f4423e..86a58339 100644
      }
  
      public ExtRenderDistance(PacketByteBuf buf) {
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
+index 3fc42fbb..c571a354 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
+@@ -1,3 +1,4 @@
++/*
+ package com.ishland.c2me.base.common.util;
+ 
+ import net.fabricmc.loader.api.FabricLoader;
+@@ -39,3 +40,4 @@ public class ASMUtils {
+         return 'L' + mappingResolver.mapClassName(INTERMEDIARY, unmappedClass.replace('/', '.')).replace('.', '/') + ";";
+     }
+ }
++*/
+\ No newline at end of file
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java
 new file mode 100644
 index 00000000..b8dc03d6
@@ -456,17 +471,17 @@ index 8feffc9a..00000000
 -  }
 -}
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
-index 46a7897a..d2f786e4 100644
+index 46a7897a..003c40b2 100644
 --- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 +++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
-@@ -1,10 +1,17 @@
+@@ -1,10 +1,14 @@
  package com.ishland.c2me.client.uncapvd.common;
  
 +import com.ishland.c2me.base.common.network.ClientChannelRegisterPayloadEvent;
  import com.ishland.c2me.base.common.network.ExtRenderDistance;
- import net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents;
- import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworking;
- import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+-import net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents;
+-import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworking;
+-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
  import net.minecraft.client.MinecraftClient;
 +import net.minecraft.client.network.ClientPlayNetworkHandler;
 +import net.minecraft.network.NetworkPhase;
@@ -477,7 +492,7 @@ index 46a7897a..d2f786e4 100644
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -14,19 +21,21 @@ public class ClientExtNetworking {
+@@ -14,19 +18,21 @@ public class ClientExtNetworking {
  
      public static final Logger LOGGER = LoggerFactory.getLogger("C2ME ClientExtNetworking");
  
@@ -505,7 +520,7 @@ index 46a7897a..d2f786e4 100644
              return;
          }
      }
-@@ -39,10 +48,10 @@ public class ClientExtNetworking {
+@@ -39,10 +45,10 @@ public class ClientExtNetworking {
          }
      }
  
@@ -834,6 +849,40 @@ index d9261cbf..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
+index 539e1efb..35f246db 100644
+--- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
++++ b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
+@@ -1,6 +1,5 @@
+ package com.ishland.c2me.fixes.worldgen.threading_issues.asm;
+ 
+-import com.ishland.c2me.base.common.util.ASMUtils;
+ import org.objectweb.asm.Opcodes;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.tree.ClassNode;
+diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
+index 64d9c2ae..b5f8136b 100644
+--- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
++++ b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
+@@ -36,7 +36,8 @@
+ package com.ishland.c2me.fixes.worldgen.threading_issues.common.debug;
+ 
+ import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
+-import net.fabricmc.loader.api.FabricLoader;
++import net.neoforged.fml.loading.FMLEnvironment;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.jetbrains.annotations.Nullable;
+ import org.objectweb.asm.tree.ClassNode;
+ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+@@ -184,7 +185,7 @@ public class SMAPSourceDebugExtension {
+             return null;
+         }
+         if (path == null) return null;
+-        final Path gameDir = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize();
++        final Path gameDir = FMLLoader.getGamePath().toAbsolutePath().normalize();
+         return gameDir.relativize(path).toString();
+     }
+ 
 diff --git a/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..78b78291
@@ -1022,15 +1071,15 @@ index d8737977..822c62b5 100644
  
      public static final boolean ensureChunkCorrectness = new ConfigSystem.ConfigAccessor()
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
-index e8383e1e..1fbc5006 100644
+index e8383e1e..759e9a92 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
-@@ -1,14 +1,18 @@
+@@ -1,14 +1,17 @@
  package com.ishland.c2me.notickvd.common;
  
 -import com.ishland.c2me.base.common.config.ModStatuses;
  import com.ishland.c2me.notickvd.ModuleEntryPoint;
- import net.fabricmc.api.ModInitializer;
+-import net.fabricmc.api.ModInitializer;
 +import net.neoforged.bus.api.IEventBus;
 +import net.neoforged.fml.common.Mod;
 +import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -1051,13 +1100,15 @@ index e8383e1e..1fbc5006 100644
 +
  }
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
-index c38cde07..02255334 100644
+index c38cde07..4efea251 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
-@@ -3,21 +3,17 @@ package com.ishland.c2me.notickvd.common;
+@@ -1,23 +1,17 @@
+ package com.ishland.c2me.notickvd.common;
+ 
  import com.ishland.c2me.base.common.network.ExtRenderDistance;
- import net.fabricmc.fabric.api.networking.v1.ServerConfigurationNetworking;
- import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+-import net.fabricmc.fabric.api.networking.v1.ServerConfigurationNetworking;
+-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 +import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
  
  public class ServerExtNetworking {
@@ -1084,6 +1135,53 @@ index c38cde07..02255334 100644
      }
  
  }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java
+index 5d87797b..23d80cbc 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java
+@@ -4,10 +4,11 @@ import com.ishland.c2me.base.mixin.access.ISyncedClientOptions;
+ import com.ishland.c2me.notickvd.common.IRenderDistanceOverride;
+ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
+ import net.minecraft.server.network.ServerPlayNetworkHandler;
+ import net.minecraft.server.network.ServerPlayerEntity;
++import org.slf4j.Logger;
++import org.spongepowered.asm.mixin.Final;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.Shadow;
+ import org.spongepowered.asm.mixin.Unique;
+@@ -17,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
+ public class MixinServerPlayNetworkHandler implements IRenderDistanceOverride {
+ 
+     @Shadow public ServerPlayerEntity player;
++    @Shadow @Final private static Logger LOGGER;
+     @Unique
+     private boolean c2me_notickvd$hasRenderDistanceOverride = false;
+ 
+@@ -28,9 +30,7 @@ public class MixinServerPlayNetworkHandler implements IRenderDistanceOverride {
+             ((ISyncedClientOptions) (Object) clientOptions).setViewDistance(renderDistance);
+             this.player.setClientOptions(clientOptions);
+         }
+-        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+-            System.out.println(String.format("%s render distance has changed to %d", this.player.getName().getString(), clientOptions.viewDistance()));
+-        }
++        LOGGER.debug("{} render distance has changed to {}", this.player.getName().getString(), clientOptions.viewDistance());
+     }
+ 
+     @WrapOperation(method = "onClientOptions", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerEntity;setClientOptions(Lnet/minecraft/network/packet/c2s/common/SyncedClientOptions;)V"))
+@@ -38,9 +38,7 @@ public class MixinServerPlayNetworkHandler implements IRenderDistanceOverride {
+         if (c2me_notickvd$hasRenderDistanceOverride) {
+             ((ISyncedClientOptions) (Object) clientOptions).setViewDistance(instance.getClientOptions().viewDistance()); // keep the original view distance
+         }
+-        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+-            System.out.println(String.format("%s render distance has changed to %d", instance.getName().getString(), clientOptions.viewDistance()));
+-        }
++        LOGGER.debug("{} render distance has changed to {}", instance.getName().getString(), clientOptions.viewDistance());
+         original.call(instance, clientOptions);
+     }
+ 
 diff --git a/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..3767cb79
@@ -1167,6 +1265,65 @@ index 8b87f08f..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
+index 1d330c31..71467b02 100644
+--- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
++++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
+@@ -1,8 +1,6 @@
+ package com.ishland.c2me.opts.allocs;
+ 
+ import com.ishland.c2me.base.common.ModuleMixinPlugin;
+-import com.ishland.c2me.opts.allocs.asm.ASMTransformerNbtOpsMapBuilderFastUtilMap;
+-import net.fabricmc.loader.api.FabricLoader;
+ import org.objectweb.asm.tree.ClassNode;
+ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+ 
+@@ -12,14 +10,14 @@ public class MixinPlugin extends ModuleMixinPlugin {
+     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+         if (!super.shouldApplyMixin(targetClassName, mixinClassName)) return false;
+ 
+-        if (mixinClassName.equals("com.ishland.c2me.opts.allocs.mixin.MixinNbtCompound") ||
+-                mixinClassName.equals("com.ishland.c2me.opts.allocs.mixin.MixinNbtCompound1"))
+-            return !FabricLoader.getInstance().isModLoaded("lithium");
+-
+-        if (mixinClassName.startsWith("com.ishland.c2me.opts.allocs.mixin.surfacebuilder.")) {
+-            return !FabricLoader.getInstance().isModLoaded("quilted_fabric_api") &&
+-                   !FabricLoader.getInstance().isModLoaded("frozenlib");
+-        }
++//        if (mixinClassName.equals("com.ishland.c2me.opts.allocs.mixin.MixinNbtCompound") ||
++//                mixinClassName.equals("com.ishland.c2me.opts.allocs.mixin.MixinNbtCompound1"))
++//            return !FabricLoader.getInstance().isModLoaded("lithium");
++//
++//        if (mixinClassName.startsWith("com.ishland.c2me.opts.allocs.mixin.surfacebuilder.")) {
++//            return !FabricLoader.getInstance().isModLoaded("quilted_fabric_api") &&
++//                   !FabricLoader.getInstance().isModLoaded("frozenlib");
++//        }
+ 
+         return true;
+     }
+@@ -27,7 +25,7 @@ public class MixinPlugin extends ModuleMixinPlugin {
+     @Override
+     public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+         super.preApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+-        ASMTransformerNbtOpsMapBuilderFastUtilMap.transform(targetClass);
++//        ASMTransformerNbtOpsMapBuilderFastUtilMap.transform(targetClass);
+     }
+ 
+ }
+diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
+index c9d122a0..1989c0f0 100644
+--- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
++++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
+@@ -1,3 +1,4 @@
++/*
+ package com.ishland.c2me.opts.allocs.asm;
+ 
+ import com.ishland.c2me.base.common.util.ASMUtils;
+@@ -72,3 +73,4 @@ public class ASMTransformerNbtOpsMapBuilderFastUtilMap {
+     }
+ 
+ }
++*/
 diff --git a/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..e54eab96
@@ -1245,6 +1402,41 @@ index cb2dcf73..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
+index 8f8785b8..12e7ff12 100644
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
++++ b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
+@@ -1,7 +1,6 @@
+ package com.ishland.c2me.opts.chunk_access;
+ 
+ import com.ishland.c2me.base.common.ModuleMixinPlugin;
+-import com.ishland.c2me.opts.chunk_access.asm.ASMTransformerLithiumChunkAccessWorkaround;
+ import org.objectweb.asm.tree.ClassNode;
+ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+ 
+@@ -10,7 +9,7 @@ public class MixinPlugin extends ModuleMixinPlugin {
+     @Override
+     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+         super.postApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+-        ASMTransformerLithiumChunkAccessWorkaround.transform(targetClass);
++//        ASMTransformerLithiumChunkAccessWorkaround.transform(targetClass);
+     }
+ 
+ }
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
+index ed025ea0..ca9bd6eb 100644
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
++++ b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
+@@ -1,3 +1,4 @@
++/*
+ package com.ishland.c2me.opts.chunk_access.asm;
+ 
+ import com.ishland.c2me.base.common.util.ASMUtils;
+@@ -57,3 +58,4 @@ public class ASMTransformerLithiumChunkAccessWorkaround {
+     }
+ 
+ }
++*/
 diff --git a/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..a97e1f0c
@@ -1881,13 +2073,40 @@ index 0e1acdf9..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
+index f97b9445..7457aaae 100644
+--- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
++++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
+@@ -5,10 +5,13 @@ import com.ishland.c2me.base.common.registry.SerializerAccess;
+ import com.ishland.c2me.rewrites.chunk_serializer.common.ChunkDataSerializer;
+ import com.ishland.c2me.rewrites.chunk_serializer.common.NbtWriter;
+ import net.minecraft.nbt.NbtElement;
++import net.neoforged.bus.api.IEventBus;
++import net.neoforged.fml.common.Mod;
+ 
+-public class TheMod implements net.fabricmc.api.ModInitializer {
+-    @Override
+-    public void onInitialize() {
++@Mod("c2me_rewrites_chunk_serializer")
++public class TheMod {
++
++    public TheMod(IEventBus eventBus) {
+         if (ModuleEntryPoint.enabled) {
+             SerializerAccess.registerSerializer((world, chunk) -> {
+                 NbtWriter nbtWriter = new NbtWriter();
+@@ -21,4 +24,5 @@ public class TheMod implements net.fabricmc.api.ModInitializer {
+             });
+         }
+     }
++
+ }
 diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..17096063
+index 00000000..342b93f9
 --- /dev/null
 +++ b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,33 @@
-+modLoader="lowcodefml"
++modLoader="javafml"
 +loaderVersion="*"
 +license="MIT"
 +issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
@@ -2267,6 +2486,21 @@ index 4af8b36b..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java b/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java
+index 25e5f7b6..3922762b 100644
+--- a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java
++++ b/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java
+@@ -1,9 +1,7 @@
+ package com.ishland.c2me.threading.lighting;
+ 
+-import net.fabricmc.loader.api.FabricLoader;
+-
+ public class ModuleEntryPoint {
+ 
+-    private static final boolean enabled = !FabricLoader.getInstance().isModLoaded("lightbench");
++    private static final boolean enabled = true;
+ 
+ }
 diff --git a/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml b/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..7f2b7d2b
