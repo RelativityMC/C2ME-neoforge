@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 90763a60..bfe483ce 100644
+index 90763a60..ad48682b 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -68,7 +68,7 @@ index 90763a60..bfe483ce 100644
              expand "version": project.version + "+" + project.minecraft_version
          }
      }
-@@ -141,7 +138,7 @@ configure (allprojects - project(":tests")) {
+@@ -141,10 +138,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -76,19 +76,36 @@ index 90763a60..bfe483ce 100644
 +//        implementation "com.electronwill.night-config:toml:${night_config_version}"
          implementation "net.objecthunter:exp4j:${exp4j_version}"
          implementation "org.jctools:jctools-core:${jctools_version}"
-         implementation annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}")
-@@ -169,8 +166,8 @@ dependencies {
+-        implementation annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}")
++        compileOnly annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-common:${mixinsquared_version}")
++        implementation "com.github.bawnorton.mixinsquared:mixinsquared-neoforge:${mixinsquared_version}"
+         api "com.ishland.flowsched:flowsched"
+     }
+ }
+@@ -169,13 +167,19 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
 -    include implementation("com.electronwill.night-config:toml:${night_config_version}")
 -    include implementation("com.electronwill.night-config:core:${night_config_version}")
++    forgeRuntimeLibrary("com.ibm.async:asyncutil:${async_util_version}")
 +//    include implementation("com.electronwill.night-config:toml:${night_config_version}")
 +//    include implementation("com.electronwill.night-config:core:${night_config_version}")
      include implementation("net.objecthunter:exp4j:${exp4j_version}")
++    forgeRuntimeLibrary("net.objecthunter:exp4j:${exp4j_version}")
      include implementation("org.jctools:jctools-core:${jctools_version}")
-     include implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}"))
-@@ -223,14 +220,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+-    include implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}"))
++    forgeRuntimeLibrary("org.jctools:jctools-core:${jctools_version}")
++    compileOnly annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-common:${mixinsquared_version}")
++    include implementation("com.github.bawnorton.mixinsquared:mixinsquared-neoforge:${mixinsquared_version}")
+     include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
++    forgeRuntimeLibrary "io.reactivex.rxjava3:rxjava:${rxjava_version}"
+     include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
++    forgeRuntimeLibrary "org.reactivestreams:reactive-streams:${reactive_streams_version}"
+ //    include implementation("com.ishland.flowsched:flowsched")
+ 
+     // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
+@@ -223,14 +227,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -161,10 +178,10 @@ index b7653d5e..f121e7c4 100644
                          .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
                          .evaluate()
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-index 480df3b6..01bed9fa 100644
+index 480df3b6..bc6c6f3c 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-@@ -3,11 +3,12 @@ package com.ishland.c2me.base.common.config;
+@@ -3,11 +3,16 @@ package com.ishland.c2me.base.common.config;
  import com.electronwill.nightconfig.core.CommentedConfig;
  import com.electronwill.nightconfig.core.file.CommentedFileConfig;
  import com.ishland.c2me.base.common.util.BooleanUtils;
@@ -176,31 +193,37 @@ index 480df3b6..01bed9fa 100644
 +import net.neoforged.fml.ModContainer;
 +import net.neoforged.fml.ModList;
 +import net.neoforged.fml.loading.FMLConfig;
++import net.neoforged.fml.loading.FMLLoader;
 +import net.neoforged.fml.loading.FMLPaths;
++import net.neoforged.fml.loading.LoadingModList;
++import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
++import net.neoforged.fml.loading.moddiscovery.ModInfo;
 +import org.apache.maven.artifact.versioning.ArtifactVersion;
 +import org.apache.maven.artifact.versioning.VersionRange;
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -23,7 +24,7 @@ public class ConfigSystem {
+@@ -23,7 +28,7 @@ public class ConfigSystem {
      private static final long CURRENT_CONFIG_VERSION = 3;
  
      private static final Supplier<CommentedFileConfig> configSupplier =
 -            () -> CommentedFileConfig.builder(FabricLoader.getInstance().getConfigDir().resolve("c2me.toml"))
-+            () -> CommentedFileConfig.builder(FMLPaths.GAMEDIR.get().resolve(FMLConfig.defaultConfigPath()))
++            () -> CommentedFileConfig.builder(FMLPaths.CONFIGDIR.get().resolve("c2me.toml"))
                      .preserveInsertionOrder()
                      .sync()
                      .build();
-@@ -98,14 +99,14 @@ public class ConfigSystem {
+@@ -98,14 +103,15 @@ public class ConfigSystem {
  
          public ConfigAccessor incompatibleMod(String modId, String predicate) {
              try {
 -                final Optional<ModContainer> optional = FabricLoader.getInstance().getModContainer(modId);
-+                Optional<? extends ModContainer> optional = ModList.get().getModContainerById(modId);
++                LoadingModList loadingModList = FMLLoader.getLoadingModList();
++                Optional<ModInfo> optional = loadingModList.getMods().stream().filter(modInfo1 -> modInfo1.getModId().equals(modId)).findFirst();
                  if (optional.isPresent()) {
-                     final ModContainer modContainer = optional.get();
+-                    final ModContainer modContainer = optional.get();
 -                    final Version version = modContainer.getMetadata().getVersion();
-+                    final ArtifactVersion version = modContainer.getModInfo().getVersion();
++                    final ModInfo modInfo = optional.get();
++                    final ArtifactVersion version = modInfo.getVersion();
  
 -                    final VersionPredicate versionPredicate = VersionPredicate.parse(predicate);
 -                    if (versionPredicate.test(version)) {
@@ -211,7 +234,7 @@ index 480df3b6..01bed9fa 100644
                          disableConfigWithReason(reason);
                      }
                  }
-@@ -250,19 +251,20 @@ public class ConfigSystem {
+@@ -250,19 +256,20 @@ public class ConfigSystem {
          }
  
          private void findModDefinedIncompatibility() {
@@ -1071,10 +1094,10 @@ index d8737977..822c62b5 100644
  
      public static final boolean ensureChunkCorrectness = new ConfigSystem.ConfigAccessor()
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
-index e8383e1e..759e9a92 100644
+index e8383e1e..7f3661a7 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
-@@ -1,14 +1,17 @@
+@@ -1,14 +1,18 @@
  package com.ishland.c2me.notickvd.common;
  
 -import com.ishland.c2me.base.common.config.ModStatuses;
@@ -1083,6 +1106,7 @@ index e8383e1e..759e9a92 100644
 +import net.neoforged.bus.api.IEventBus;
 +import net.neoforged.fml.common.Mod;
 +import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
++import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
  
 -public class NoTickVDInitializer implements ModInitializer {
 -    @Override
@@ -1094,7 +1118,7 @@ index e8383e1e..759e9a92 100644
 +
 +    public NoTickVDInitializer(IEventBus modEventBus) {
 +        if (ModuleEntryPoint.enabled && Config.enableExtRenderDistanceProtocol) {
-+            modEventBus.addListener(FMLCommonSetupEvent.class, event -> ServerExtNetworking.registerListeners());
++            modEventBus.addListener(RegisterPayloadHandlersEvent.class, ServerExtNetworking::registerListeners);
          }
      }
 +
@@ -1135,6 +1159,19 @@ index c38cde07..4efea251 100644
      }
  
  }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinWorld.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinWorld.java
+index 97e6efba..f85df026 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinWorld.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinWorld.java
+@@ -13,7 +13,7 @@ public class MixinWorld {
+ 
+     @Shadow @Final public boolean isClient;
+ 
+-    @ModifyArg(method = "setBlockState(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;II)Z", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkLevelType;isAfter(Lnet/minecraft/server/world/ChunkLevelType;)Z"))
++    @ModifyArg(method = "markAndNotifyBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkLevelType;isAfter(Lnet/minecraft/server/world/ChunkLevelType;)Z"))
+     private ChunkLevelType modifyLeastStatus(ChunkLevelType levelType) {
+         return levelType.ordinal() > ChunkLevelType.FULL.ordinal() ? ChunkLevelType.FULL : levelType;
+     }
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java
 index 5d87797b..23d80cbc 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/ext_render_distance/MixinServerPlayNetworkHandler.java
@@ -2100,6 +2137,27 @@ index f97b9445..7457aaae 100644
      }
 +
  }
+diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
+index ab1b330a..e3b1e0e0 100644
+--- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
++++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
+@@ -14,7 +14,6 @@ import com.ishland.c2me.rewrites.chunk_serializer.common.utils.StarLightUtil;
+ import com.mojang.serialization.Codec;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.SharedConstants;
+ import net.minecraft.block.Block;
+ import net.minecraft.block.BlockState;
+@@ -155,7 +154,7 @@ public final class ChunkDataSerializer {
+     private static final int STARLIGHT_LIGHT_VERSION = 8;
+ 
+     // TODO: validating starlight compatibility?
+-    private static final boolean STARLIGHT = FabricLoader.getInstance().isModLoaded("starlight");
++    private static final boolean STARLIGHT = false; // TODO starlight doesn't exist on forge (yet)
+ 
+     /**
+      * Mirror of {@link ChunkSerializer#serialize(ServerWorld, Chunk)}
 diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..342b93f9
@@ -2183,6 +2241,38 @@ index 11bb4286..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
+index 9c5d9699..2268c457 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
+@@ -1,14 +1,15 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.fapi;
+ 
+-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.world.chunk.WorldChunk;
++import net.neoforged.neoforge.common.NeoForge;
++import net.neoforged.neoforge.event.level.ChunkEvent;
+ 
+ public class LifecycleEventInvoker {
+ 
+-    public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk) {
++    public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
+         try {
+-            ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(world, chunk);
++            NeoForge.EVENT_BUS.post(new ChunkEvent.Load(chunk, newChunk));
+         } catch (Throwable t) {
+             t.printStackTrace();
+         }
+@@ -16,7 +17,7 @@ public class LifecycleEventInvoker {
+ 
+     public static void invokeChunkUnload(ServerWorld world, WorldChunk chunk) {
+         try {
+-            ServerChunkEvents.CHUNK_UNLOAD.invoker().onChunkUnload(world, chunk);
++            NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
+         } catch (Throwable t) {
+             t.printStackTrace();
+         }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 index 1c16af46..c1026825 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
@@ -2225,7 +2315,7 @@ index b4e63a8c..556db081 100644
                      }
  
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 29803d74..8819ad3a 100644
+index 29803d74..2013148e 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,12 +1,10 @@
@@ -2248,7 +2338,7 @@ index 29803d74..8819ad3a 100644
 -                if (ModStatuses.fabric_lifecycle_events_v1) {
 -                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk);
 -                }
-+                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk);
++                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
              }
  
              ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
@@ -2408,6 +2498,43 @@ index 2392cab3..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+index 7ac5ac88..2aa5b849 100644
+--- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
++++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+@@ -4,7 +4,6 @@ import com.ishland.c2me.base.mixin.access.IServerChunkManager;
+ import com.ishland.c2me.notickvd.common.IChunkTicketManager;
+ import com.mojang.brigadier.CommandDispatcher;
+ import com.mojang.brigadier.context.CommandContext;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.server.command.CommandManager;
+ import net.minecraft.server.command.ServerCommandSource;
+ import net.minecraft.server.world.ChunkTicketManager;
+@@ -22,15 +21,15 @@ public class C2MECommands {
+                                         .requires(unused -> com.ishland.c2me.notickvd.ModuleEntryPoint.enabled)
+                                         .executes(C2MECommands::noTickCommand)
+                         )
+-                        .then(
+-                                CommandManager.literal("debug")
+-                                        .requires(unused -> FabricLoader.getInstance().isDevelopmentEnvironment())
+-//                                        .then(
+-//                                                CommandManager.literal("mobcaps")
+-//                                                        .requires(unused -> com.ishland.c2me.notickvd.ModuleEntryPoint.enabled)
+-//                                                        .executes(C2MECommands::mobcapsCommand)
+-//                                        )
+-                        )
++//                        .then(
++//                                CommandManager.literal("debug")
++//                                        .requires(unused -> FabricLoader.getInstance().isDevelopmentEnvironment())
++////                                        .then(
++////                                                CommandManager.literal("mobcaps")
++////                                                        .requires(unused -> com.ishland.c2me.notickvd.ModuleEntryPoint.enabled)
++////                                                        .executes(C2MECommands::mobcapsCommand)
++////                                        )
++//                        )
+         );
+     }
+ 
 diff --git a/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml b/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..911f619f
@@ -2603,13 +2730,69 @@ index 4073f255..ffc53405 100644
  //include 'c2me-opts-worldgen-biome-cache'
  include 'c2me-opts-worldgen-general'
  include 'c2me-opts-allocs'
+diff --git a/src/main/java/com/ishland/c2me/C2MEMod.java b/src/main/java/com/ishland/c2me/C2MEMod.java
+index f965ae5c..3c169aa1 100644
+--- a/src/main/java/com/ishland/c2me/C2MEMod.java
++++ b/src/main/java/com/ishland/c2me/C2MEMod.java
+@@ -1,10 +1,11 @@
+ package com.ishland.c2me;
+ 
+ import com.ibm.asyncutil.util.Combinators;
+-import net.fabricmc.api.ModInitializer;
+ import net.minecraft.util.math.random.ChunkRandom;
+ import net.minecraft.util.math.random.LocalRandom;
+ import net.minecraft.world.storage.ChunkCompressionFormat;
++import net.neoforged.bus.api.IEventBus;
++import net.neoforged.fml.common.Mod;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -20,11 +21,12 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
+ import java.util.stream.Collectors;
+ import java.util.stream.IntStream;
+ 
+-public class C2MEMod implements ModInitializer {
++@Mod("c2me")
++public class C2MEMod {
+     public static final Logger LOGGER = LoggerFactory.getLogger("C2ME");
+ 
+-    @Override
+-    public void onInitialize() {
++    public C2MEMod(IEventBus eventBus) {
++        PreLaunchHandler.onPreLaunch();
+         if (Boolean.getBoolean("com.ishland.c2me.runCompressionBenchmark")) {
+             LOGGER.info("Benchmarking chunk stream speed");
+             LOGGER.info("Warming up");
+diff --git a/src/main/java/com/ishland/c2me/PreLaunchHandler.java b/src/main/java/com/ishland/c2me/PreLaunchHandler.java
+index 42418c6c..b57175bd 100644
+--- a/src/main/java/com/ishland/c2me/PreLaunchHandler.java
++++ b/src/main/java/com/ishland/c2me/PreLaunchHandler.java
+@@ -1,6 +1,5 @@
+ package com.ishland.c2me;
+ 
+-import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.spongepowered.asm.mixin.MixinEnvironment;
+@@ -12,9 +11,8 @@ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Set;
+ 
+-public class PreLaunchHandler implements PreLaunchEntrypoint {
+-    @Override
+-    public void onPreLaunch() {
++public class PreLaunchHandler {
++    static void onPreLaunch() {
+         if (Boolean.getBoolean("com.ishland.c2me.mixin.doAudit")) {
+             Logger auditLogger = LoggerFactory.getLogger("C2ME Mixin Audit");
+             try {
 diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..5c09f37b
+index 00000000..e7d9e072
 --- /dev/null
 +++ b/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,37 @@
-+modLoader="lowcodefml"
++modLoader="javafml"
 +loaderVersion="*"
 +license="MIT"
 +issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
@@ -2745,6 +2928,64 @@ index 377b5f8e..30c77611 100644
              expand "version": project.version
          }
      }
+diff --git a/tests/c2me-test/build.gradle b/tests/c2me-test/build.gradle
+index aa6023b3..741dc919 100644
+--- a/tests/c2me-test/build.gradle
++++ b/tests/c2me-test/build.gradle
+@@ -29,6 +29,8 @@ afterEvaluate {
+     runTestC2MEServer.configure {
+         doFirst {
+             standardOutput = new RedirectingOutputStream(project, getName())
++            new File(project.getProjectDir(), "build/resources/main").mkdirs()
++            new File(project.getProjectDir(), "build/classes/java/main").mkdirs()
+         }
+         onlyIf {
+             !getRootProject().getProjectDir().toPath().relativize(project.getBuildDir().toPath()).resolve("testServer").toFile().isDirectory()
+@@ -39,8 +41,15 @@ afterEvaluate {
+ }
+ 
+ dependencies {
+-    runtimeOnly project(":tests:test-mod").sourceSets.main.output
+-    runtimeOnly project(":").sourceSets.main.output
++    runtimeOnly project(path: ":tests:test-mod", configuration: "namedElements")
++    runtimeOnly project(path: ":", configuration: "namedElements")
++
++    forgeRuntimeLibrary("com.ibm.async:asyncutil:${async_util_version}")
++    forgeRuntimeLibrary("net.objecthunter:exp4j:${exp4j_version}")
++    forgeRuntimeLibrary("org.jctools:jctools-core:${jctools_version}")
++    forgeRuntimeLibrary("io.reactivex.rxjava3:rxjava:${rxjava_version}")
++    forgeRuntimeLibrary("org.reactivestreams:reactive-streams:${reactive_streams_version}")
++    forgeRuntimeLibrary("com.ishland.flowsched:flowsched")
+ }
+ 
+ dependencies {
+diff --git a/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml b/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
+new file mode 100644
+index 00000000..5c62edb0
+--- /dev/null
++++ b/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
+@@ -0,0 +1,21 @@
++modLoader="lowcodefml"
++loaderVersion="*"
++license="MIT"
++issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
++clientSideOnly = false
++showAsResourcePack = false
++showAsDataPack = false
++
++[[mods]]
++modId="c2me_testc2meserver"
++version="${version}"
++logoFile="assets/c2me/icon.png"
++authors="RelativityMC, ishland"
++displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
++
++[[dependencies.c2me_testc2meserver]]
++modId = "minecraft"
++type = "required"
++versionRange = "*"
++ordering = "NONE"
++side = "BOTH"
 diff --git a/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/C2METestMod.java b/tests/test-mod/src/main/java/com/ishland/c2me/tests/testmod/C2METestMod.java
 deleted file mode 100644
 index f26cf7c2..00000000
