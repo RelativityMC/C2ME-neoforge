@@ -2573,7 +2573,7 @@ index 8106ae0c..67f39228 100644
  rxjava_version=3.1.8
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 4073f255..37fe66a2 100644
+index 4073f255..ffc53405 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -4,13 +4,16 @@ pluginManagement {
@@ -2594,6 +2594,15 @@ index 4073f255..37fe66a2 100644
      dependencySubstitution {
          substitute module('com.ishland.flowsched:flowsched') using project(':')
      }
+@@ -39,7 +42,7 @@ include 'c2me-fixes-worldgen-threading-issues'
+ include 'c2me-fixes-worldgen-vanilla-bugs'
+ include 'c2me-opts-worldgen-vanilla'
+ include 'c2me-opts-natives-math'
+-include 'c2me-opts-dfc'
++//include 'c2me-opts-dfc' // TODO NeoForge support
+ //include 'c2me-opts-worldgen-biome-cache'
+ include 'c2me-opts-worldgen-general'
+ include 'c2me-opts-allocs'
 diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..5c09f37b
