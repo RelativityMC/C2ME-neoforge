@@ -2615,10 +2615,10 @@ index 11104c69..4f5ad227 100644
 +    }
 +}
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-index 9c5d9699..2268c457 100644
+index e6fc18a3..2268c457 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-@@ -1,14 +1,15 @@
+@@ -1,17 +1,15 @@
  package com.ishland.c2me.rewrites.chunksystem.common.fapi;
  
 -import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
@@ -2629,15 +2629,17 @@ index 9c5d9699..2268c457 100644
  
  public class LifecycleEventInvoker {
  
--    public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk) {
-+    public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
+     public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
          try {
 -            ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(world, chunk);
+-            if (newChunk) {
+-                ServerChunkEvents.CHUNK_GENERATE.invoker().onChunkGenerate(world, chunk);
+-            }
 +            NeoForge.EVENT_BUS.post(new ChunkEvent.Load(chunk, newChunk));
          } catch (Throwable t) {
              t.printStackTrace();
          }
-@@ -16,7 +17,7 @@ public class LifecycleEventInvoker {
+@@ -19,7 +17,7 @@ public class LifecycleEventInvoker {
  
      public static void invokeChunkUnload(ServerWorld world, WorldChunk chunk) {
          try {
@@ -2688,7 +2690,7 @@ index b4e63a8c..556db081 100644
                      }
  
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 29803d74..2013148e 100644
+index e7da3401..2013148e 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,12 +1,10 @@
@@ -2709,7 +2711,7 @@ index 29803d74..2013148e 100644
                  worldChunk.updateAllBlockEntities();
                  worldChunk.addChunkTickSchedulers(serverWorld);
 -                if (ModStatuses.fabric_lifecycle_events_v1) {
--                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk);
+-                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
 -                }
 +                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
              }
@@ -3086,7 +3088,7 @@ index 00000000..7f2b7d2b
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/gradle.properties b/gradle.properties
-index 8106ae0c..654e0671 100644
+index eec6ae39..654e0671 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3102,7 +3104,7 @@ index 8106ae0c..654e0671 100644
  minecraft_version=1.21.1
  yarn_mappings=1.21.1+build.1
 -loader_version=0.16.3
--fabric_version=0.102.0+1.21.1
+-fabric_version=0.107.0+1.21.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
 +forge_version=21.1.71
 +# https://github.com/architectury/architectury-loom/issues/230
@@ -3275,10 +3277,10 @@ index ba7b34b5..27b2734c 100644
    ],
 diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 51b01a6f..00000000
+index bb6a358a..00000000
 --- a/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,41 +0,0 @@
+@@ -1,42 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me",
@@ -3317,7 +3319,8 @@ index 51b01a6f..00000000
 -  },
 -  "breaks": {
 -    "tic_tacs": "*",
--    "optifabric": "*"
+-    "optifabric": "*",
+-    "fabric-api": "<0.107.0"
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
