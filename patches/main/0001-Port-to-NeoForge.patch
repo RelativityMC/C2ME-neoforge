@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 90763a60..1aafb614 100644
+index 90763a60..94f337c2 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,7 +25,7 @@ index 90763a60..1aafb614 100644
              migrateMappings.configure {
                  outputDir = project.file("src/main/java")
              }
-@@ -55,27 +55,24 @@ allprojects {
+@@ -55,29 +55,27 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
@@ -58,8 +58,19 @@ index 90763a60..1aafb614 100644
 +        neoForge "net.neoforged:neoforge:${project.forge_version}"
      }
  
++
      loom {
-@@ -96,7 +93,7 @@ configure (allprojects - project(":tests")) {
+         def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
+         accessWidenerPath = file
+@@ -91,12 +89,15 @@ configure (allprojects - project(":tests")) {
+                 ideConfigGenerated project.rootProject == project
+             }
+         }
++        mixin {
++            useLegacyMixinAp = true
++        }
+     }
+ 
      processResources {
          inputs.property "version", project.version + "+" + project.minecraft_version
  
@@ -68,7 +79,18 @@ index 90763a60..1aafb614 100644
              expand "version": project.version + "+" + project.minecraft_version
          }
      }
-@@ -141,10 +138,11 @@ configure (allprojects - project(":tests")) {
+@@ -105,6 +106,10 @@ configure (allprojects - project(":tests")) {
+         from rootProject.file("LICENSE")
+     }
+ 
++    remapJar {
++        useMixinAP = true
++    }
++
+     java {
+         withSourcesJar()
+     }
+@@ -141,10 +146,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -82,7 +104,7 @@ index 90763a60..1aafb614 100644
          api "com.ishland.flowsched:flowsched"
      }
  }
-@@ -169,13 +167,20 @@ dependencies {
+@@ -169,13 +175,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -106,7 +128,7 @@ index 90763a60..1aafb614 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -223,14 +228,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+@@ -223,14 +236,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -126,6 +148,25 @@ index 90763a60..1aafb614 100644
      }
  }
  
+diff --git a/c2me-base/build.gradle b/c2me-base/build.gradle
+index 52b3cf86..e096fb84 100644
+--- a/c2me-base/build.gradle
++++ b/c2me-base/build.gradle
+@@ -19,6 +19,14 @@ remapJar {
+     input = shadowJar.archiveFile
+     archiveFileName = shadowJar.archiveFileName.get().replaceAll("-dev\\.jar\$", ".jar")
+     addNestedDependencies = true
++    atAccessWideners.add("c2me-base.accesswidener")
+     dependsOn shadowJar
+ }
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-base.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java b/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java
 index 0aa3ca5c..6d3e8c66 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/C2MEBaseMod.java
@@ -155,7 +196,7 @@ index 0aa3ca5c..6d3e8c66 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index b7653d5e..f121e7c4 100644
+index b7653d5e..404ef427 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -2,8 +2,8 @@ package com.ishland.c2me.base;
@@ -169,7 +210,26 @@ index b7653d5e..f121e7c4 100644
  import net.objecthunter.exp4j.ExpressionBuilder;
  import net.objecthunter.exp4j.function.Function;
  
-@@ -78,7 +78,7 @@ public class ModuleEntryPoint {
+@@ -39,18 +39,6 @@ public class ModuleEntryPoint {
+                     """.indent(1))
+             .getString(DEFAULT_EXPRESSION, DEFAULT_EXPRESSION);
+ 
+-    public static final boolean disableLoggingShutdownHook = new ConfigSystem.ConfigAccessor()
+-            .key("fixes.disableLoggingShutdownHook")
+-            .comment("""
+-                    
+-                    Whether to disable the shutdown hook of log4j2 on dedicated servers.
+-                    Enabling this also makes the JVM exit when the dedicated server is considered fully shut down.
+-                    This option have no effect on client-side.
+-                    We has historically been doing this, and this config option allows you to disable this behavior.
+-                    """.indent(1))
+-            .incompatibleMod("textile_backup", "*")
+-            .getBoolean(true, false);
+-
+     public static final int defaultParallelism;
+ 
+     private static int tryEvaluateExpression(String expression) {
+@@ -78,7 +66,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
@@ -178,6 +238,20 @@ index b7653d5e..f121e7c4 100644
                          .setVariable("cpus", Runtime.getRuntime().availableProcessors())
                          .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
                          .evaluate()
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
+index 0e82da67..1ec7e49c 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
+@@ -13,9 +13,6 @@ public final class TheMixinPlugin extends ModuleMixinPlugin {
+             return false;
+         }
+ 
+-        if (mixinClassName.startsWith("com.ishland.c2me.base.mixin.util.log4j2shutdownhookisnomore."))
+-            return ModuleEntryPoint.disableLoggingShutdownHook;
+-
+         return true;
+     }
+ }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 index 480df3b6..bc6c6f3c 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
@@ -438,13 +512,17 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 0a1f33e7..f910df24 100644
+index 0a1f33e7..0f08893f 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -56,5 +56,8 @@
-     "theinterface.MixinStorageIoWorker",
-     "util.log4j2shutdownhookisnomore.MixinMain",
-     "util.log4j2shutdownhookisnomore.MixinMinecraftDedicatedServer"
+@@ -53,8 +53,9 @@
+     "access.IXoroshiro128PlusPlusRandomImpl",
+     "priority.MixinServerChunkManager",
+     "scheduler.MixinThreadedAnvilChunkStorage",
+-    "theinterface.MixinStorageIoWorker",
+-    "util.log4j2shutdownhookisnomore.MixinMain",
+-    "util.log4j2shutdownhookisnomore.MixinMinecraftDedicatedServer"
++    "theinterface.MixinStorageIoWorker"
 +  ],
 +  "client": [
 +    "network.MixinClientCommonNetworkHandler"
@@ -494,6 +572,21 @@ index 8feffc9a..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
+index 11104c69..4dcaf71f 100644
+--- a/c2me-client-uncapvd/build.gradle
++++ b/c2me-client-uncapvd/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-client-uncapvd.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 index 46a7897a..003c40b2 100644
 --- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
@@ -717,6 +810,21 @@ index 5852f9a8..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-fixes-chunkio-threading-issues/build.gradle b/c2me-fixes-chunkio-threading-issues/build.gradle
+index 11104c69..d69b8049 100644
+--- a/c2me-fixes-chunkio-threading-issues/build.gradle
++++ b/c2me-fixes-chunkio-threading-issues/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-fixes-chunkio-threading-issues.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..3f3101f2
@@ -795,6 +903,21 @@ index 125cafc6..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-fixes-general-threading-issues/build.gradle b/c2me-fixes-general-threading-issues/build.gradle
+index 11104c69..9642e33c 100644
+--- a/c2me-fixes-general-threading-issues/build.gradle
++++ b/c2me-fixes-general-threading-issues/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-fixes-general-threading-issues.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..317ba9cd
@@ -873,6 +996,21 @@ index d9261cbf..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-fixes-worldgen-threading-issues/build.gradle b/c2me-fixes-worldgen-threading-issues/build.gradle
+index 11104c69..4ac10b14 100644
+--- a/c2me-fixes-worldgen-threading-issues/build.gradle
++++ b/c2me-fixes-worldgen-threading-issues/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-fixes-worldgen-threading-issues.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
 index 539e1efb..35f246db 100644
 --- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
@@ -993,6 +1131,21 @@ index d2ab63d0..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-fixes-worldgen-vanilla-bugs/build.gradle b/c2me-fixes-worldgen-vanilla-bugs/build.gradle
+index 11104c69..6710a6d4 100644
+--- a/c2me-fixes-worldgen-vanilla-bugs/build.gradle
++++ b/c2me-fixes-worldgen-vanilla-bugs/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-fixes-worldgen-vanilla-bugs.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..c131913b
@@ -1071,6 +1224,21 @@ index f8c7fb82..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-notickvd/build.gradle b/c2me-notickvd/build.gradle
+index 11104c69..cf7e746b 100644
+--- a/c2me-notickvd/build.gradle
++++ b/c2me-notickvd/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-notickvd.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 index d8737977..822c62b5 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
@@ -1303,6 +1471,21 @@ index 8b87f08f..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-allocs/build.gradle b/c2me-opts-allocs/build.gradle
+index 11104c69..cf6491e9 100644
+--- a/c2me-opts-allocs/build.gradle
++++ b/c2me-opts-allocs/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-allocs.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
 index 1d330c31..71467b02 100644
 --- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
@@ -1362,6 +1545,27 @@ index c9d122a0..1989c0f0 100644
  
  }
 +*/
+diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
+index 8deb552b..5b2859b7 100644
+--- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
++++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
+@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+ import net.minecraft.nbt.NbtCompound;
+ import net.minecraft.nbt.NbtElement;
+ import net.minecraft.nbt.NbtType;
++import org.spongepowered.asm.mixin.Dynamic;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.injection.At;
+ import org.spongepowered.asm.mixin.injection.ModifyVariable;
+@@ -12,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
+ import java.util.HashMap;
+ import java.util.Map;
+ 
+-@Mixin(targets = "net.minecraft.nbt.NbtCompound$1")
++@Mixin(targets = {"net.minecraft.nbt.NbtCompound$1"})
+ public abstract class MixinNbtCompound1 implements NbtType<NbtCompound> {
+ 
+     @SuppressWarnings("UnnecessaryQualifiedMemberReference")
 diff --git a/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..e54eab96
@@ -1401,6 +1605,19 @@ index 00000000..e54eab96
 +versionRange = "*"
 +ordering = "NONE"
 +side = "BOTH"
+diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
+index b9c3127d..4c62f92c 100644
+--- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
++++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
+@@ -5,8 +5,6 @@
+   "plugin": "com.ishland.c2me.opts.allocs.MixinPlugin",
+   "mixins": [
+     "MixinIdentifier",
+-    "MixinNbtCompound",
+-    "MixinNbtCompound1",
+     "MixinNbtList",
+     "MixinUtil",
+     "asm.ASMTargets",
 diff --git a/c2me-opts-allocs/src/main/resources/fabric.mod.json b/c2me-opts-allocs/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index cb2dcf73..00000000
@@ -1440,6 +1657,21 @@ index cb2dcf73..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-chunk-access/build.gradle b/c2me-opts-chunk-access/build.gradle
+index 11104c69..ec3b882d 100644
+--- a/c2me-opts-chunk-access/build.gradle
++++ b/c2me-opts-chunk-access/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-chunk-access.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
 index 8f8785b8..12e7ff12 100644
 --- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
@@ -1553,6 +1785,21 @@ index 5bb0596d..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-chunkio/build.gradle b/c2me-opts-chunkio/build.gradle
+index 11104c69..04c94622 100644
+--- a/c2me-opts-chunkio/build.gradle
++++ b/c2me-opts-chunkio/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-chunkio.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..4bafcc83
@@ -1631,6 +1878,21 @@ index 9dd0f4b3..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-dfc/build.gradle b/c2me-opts-dfc/build.gradle
+index 11104c69..8485eb36 100644
+--- a/c2me-opts-dfc/build.gradle
++++ b/c2me-opts-dfc/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-dfc.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..aa7ae047
@@ -1709,6 +1971,21 @@ index a675d2c6..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-math/build.gradle b/c2me-opts-math/build.gradle
+index 11104c69..03ab653c 100644
+--- a/c2me-opts-math/build.gradle
++++ b/c2me-opts-math/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-math.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..9361ea12
@@ -1787,6 +2064,25 @@ index 9889ea15..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-natives-math/build.gradle b/c2me-opts-natives-math/build.gradle
+index 4f3484aa..50857608 100644
+--- a/c2me-opts-natives-math/build.gradle
++++ b/c2me-opts-natives-math/build.gradle
+@@ -4,6 +4,14 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-natives-math.mixins.json"
++        ])
++    }
++}
++
+ java {
+     sourceCompatibility = JavaVersion.VERSION_22
+     targetCompatibility = JavaVersion.VERSION_22
 diff --git a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..8edf94e1
@@ -1869,6 +2165,21 @@ index b90edb5c..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-scheduling/build.gradle b/c2me-opts-scheduling/build.gradle
+index 11104c69..f43d26d6 100644
+--- a/c2me-opts-scheduling/build.gradle
++++ b/c2me-opts-scheduling/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-scheduling.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..b0a8f1d7
@@ -1947,6 +2258,21 @@ index 449b2905..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-worldgen-general/build.gradle b/c2me-opts-worldgen-general/build.gradle
+index 11104c69..598b513b 100644
+--- a/c2me-opts-worldgen-general/build.gradle
++++ b/c2me-opts-worldgen-general/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-worldgen-general.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..1bef8012
@@ -2025,6 +2351,21 @@ index 3bda5df6..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-worldgen-vanilla/build.gradle b/c2me-opts-worldgen-vanilla/build.gradle
+index 63e5432f..a03ce5fe 100644
+--- a/c2me-opts-worldgen-vanilla/build.gradle
++++ b/c2me-opts-worldgen-vanilla/build.gradle
+@@ -3,3 +3,10 @@ moduleDependencies(project, [
+         "c2me-opts-worldgen-general",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-worldgen-vanilla.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..83d9bdd1
@@ -2111,6 +2452,22 @@ index 0e1acdf9..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-rewrites-chunk-serializer/build.gradle b/c2me-rewrites-chunk-serializer/build.gradle
+index 748a5aca..ec2df673 100644
+--- a/c2me-rewrites-chunk-serializer/build.gradle
++++ b/c2me-rewrites-chunk-serializer/build.gradle
+@@ -1,3 +1,11 @@
+ moduleDependencies(project, [
+         "c2me-base",
+ ])
++
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-rewrites-chunk-serializer.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
 index f97b9445..7457aaae 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
@@ -2242,6 +2599,21 @@ index 11bb4286..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-rewrites-chunk-system/build.gradle b/c2me-rewrites-chunk-system/build.gradle
+index 11104c69..4f5ad227 100644
+--- a/c2me-rewrites-chunk-system/build.gradle
++++ b/c2me-rewrites-chunk-system/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-rewrites-chunk-system.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 index 9c5d9699..2268c457 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
@@ -2421,6 +2793,21 @@ index ba80e3de..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-rewrites-chunkio/build.gradle b/c2me-rewrites-chunkio/build.gradle
+index f6df05e6..c98bfd37 100644
+--- a/c2me-rewrites-chunkio/build.gradle
++++ b/c2me-rewrites-chunkio/build.gradle
+@@ -3,3 +3,10 @@ moduleDependencies(project, [
+         "c2me-opts-chunkio",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-rewrites-chunkio.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..b2df9173
@@ -2499,6 +2886,21 @@ index 2392cab3..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-server-utils/build.gradle b/c2me-server-utils/build.gradle
+index 2f384468..c718e14b 100644
+--- a/c2me-server-utils/build.gradle
++++ b/c2me-server-utils/build.gradle
+@@ -3,3 +3,10 @@ moduleDependencies(project, [
+         "c2me-notickvd",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-server-utils.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
 index 7ac5ac88..2aa5b849 100644
 --- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
@@ -2614,6 +3016,21 @@ index 4af8b36b..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-threading-lighting/build.gradle b/c2me-threading-lighting/build.gradle
+index 11104c69..a1e679d2 100644
+--- a/c2me-threading-lighting/build.gradle
++++ b/c2me-threading-lighting/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-threading-lighting.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java b/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java
 index 25e5f7b6..3922762b 100644
 --- a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/ModuleEntryPoint.java
@@ -2669,13 +3086,15 @@ index 00000000..7f2b7d2b
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/gradle.properties b/gradle.properties
-index 8106ae0c..67f39228 100644
+index 8106ae0c..654e0671 100644
 --- a/gradle.properties
 +++ b/gradle.properties
-@@ -3,19 +3,23 @@ org.gradle.jvmargs=-Xmx3G
+@@ -2,20 +2,24 @@
+ org.gradle.jvmargs=-Xmx3G
  org.gradle.parallel=true
  org.gradle.warning.mode=all
- fabric.loom.multiProjectOptimisation=true
+-fabric.loom.multiProjectOptimisation=true
++#fabric.loom.multiProjectOptimisation=true
 +
 +loom.platform=neoforge
  # Fabric Properties
@@ -2701,7 +3120,7 @@ index 8106ae0c..67f39228 100644
  rxjava_version=3.1.8
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 4073f255..ffc53405 100644
+index 4073f255..121d38a8 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -4,13 +4,16 @@ pluginManagement {
@@ -2722,15 +3141,26 @@ index 4073f255..ffc53405 100644
      dependencySubstitution {
          substitute module('com.ishland.flowsched:flowsched') using project(':')
      }
-@@ -39,7 +42,7 @@ include 'c2me-fixes-worldgen-threading-issues'
+@@ -38,8 +41,8 @@ include 'c2me-fixes-worldgen-threading-issues'
+ //include 'c2me-fixes-worldgen-graal'
  include 'c2me-fixes-worldgen-vanilla-bugs'
  include 'c2me-opts-worldgen-vanilla'
- include 'c2me-opts-natives-math'
+-include 'c2me-opts-natives-math'
 -include 'c2me-opts-dfc'
++//include 'c2me-opts-natives-math' // TODO no java22 support for neoforge
 +//include 'c2me-opts-dfc' // TODO NeoForge support
  //include 'c2me-opts-worldgen-biome-cache'
  include 'c2me-opts-worldgen-general'
  include 'c2me-opts-allocs'
+@@ -47,7 +50,7 @@ include 'c2me-opts-math'
+ include 'c2me-opts-scheduling'
+ include 'c2me-opts-chunkio'
+ include 'c2me-opts-chunk-access'
+-include 'c2me-rewrites-chunk-serializer'
++//include 'c2me-rewrites-chunk-serializer' // TODO imcompatible with NeoForge
+ include 'c2me-rewrites-chunkio'
+ include 'c2me-rewrites-chunk-system'
+ include 'c2me-server-utils'
 diff --git a/src/main/java/com/ishland/c2me/C2MEMod.java b/src/main/java/com/ishland/c2me/C2MEMod.java
 index f965ae5c..3c169aa1 100644
 --- a/src/main/java/com/ishland/c2me/C2MEMod.java
@@ -2830,6 +3260,19 @@ index 00000000..e7d9e072
 +reason = "causes the world to save infinitely"
 +ordering = "NONE"
 +side = "BOTH"
+diff --git a/src/main/resources/c2me.mixins.json b/src/main/resources/c2me.mixins.json
+index ba7b34b5..27b2734c 100644
+--- a/src/main/resources/c2me.mixins.json
++++ b/src/main/resources/c2me.mixins.json
+@@ -2,7 +2,7 @@
+   "required": true,
+   "minVersion": "0.8",
+   "package": "com.ishland.c2me.mixin",
+-  "compatibilityLevel": "JAVA_16",
++  "compatibilityLevel": "JAVA_21",
+   "mixinPriority": 1100,
+   "mixins": [
+   ],
 diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index 51b01a6f..00000000
