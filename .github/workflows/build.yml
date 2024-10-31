@@ -50,6 +50,17 @@ jobs:
           cd C2ME-fabric-patched
           ./gradlew clean build
 
+      - name: upload to modrinth and curseforge
+        run: |
+          cd C2ME-fabric-patche
+          ./gradlew modrinth curseforge
+        if: github.ref == 'refs/heads/ver/1.21.1'
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_UPLOAD_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_API_TOKEN }}
+          GITHUB_EVENT_RAW_PATH: ${{ github.event_path }}
+        continue-on-error: true
+
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:

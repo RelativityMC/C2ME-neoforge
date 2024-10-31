@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Thu, 31 Oct 2024 23:22:33 +0800
+Subject: [PATCH] Setup publishing
+
+
+diff --git a/build.gradle b/build.gradle
+index 81b34561..af0b213b 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -199,13 +199,13 @@ dependencies {
+ apply plugin: 'com.modrinth.minotaur'
+ modrinth {
+     token = System.getenv("MODRINTH_TOKEN") // This is the default. Remember to have the MODRINTH_TOKEN environment variable set or else this will fail, or set it to whatever you want - just make sure it stays private!
+-    projectId = "c2me-fabric" // This can be the project ID or the slug. Either will work!
++    projectId = "c2me-neoforge" // This can be the project ID or the slug. Either will work!
+     versionNumber = project.version + "+" + project.minecraft_version // You don't need to set this manually. Will fail if Modrinth has this version already
+     versionName = project.version + " devbuild for " + project.minecraft_version
+     versionType = "alpha" // This is the default -- can also be `beta` or `alpha`
+     uploadFile = remapJar // With Loom, this MUST be set to `remapJar` instead of `jar`!
+     gameVersions = [project.minecraft_version] // Must be an array, even with only one version
+-    loaders = ["fabric"] // Must also be an array - no need to specify this if you're using Loom or ForgeGradle
++    loaders = ["neoforge"] // Must also be an array - no need to specify this if you're using Loom or ForgeGradle
+     changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
+ }
+ 
+@@ -214,14 +214,15 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+     curseforge {
+         apiKey = System.getenv("CURSEFORGE_TOKEN")
+         project {
+-            id = '533097'
++            id = '1131909'
+             changelogType = "markdown"
+             changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
+             releaseType = 'alpha'
+ 
+             addGameVersion project.minecraft_version
+-            addGameVersion "Fabric"
++            addGameVersion "NeoForge"
+             addGameVersion "Java 21"
++            addGameVersion "Java 22"
+ 
+             mainArtifact(remapJar) {
+                 displayName = project.version + " devbuild for " + project.minecraft_version
