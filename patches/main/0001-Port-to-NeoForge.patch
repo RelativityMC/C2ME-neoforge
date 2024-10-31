@@ -260,6 +260,20 @@ index 0e82da67..1ec7e49c 100644
          return true;
      }
  }
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
+index 7fd0863f..ff8f3dab 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
+@@ -35,6 +35,9 @@ public class ModuleMixinPlugin implements IMixinConfigPlugin {
+             }
+         } catch (Throwable t) {
+             LOGGER.warn("Error loading module entrypoint: {}", targetClass, t);
++            if (t instanceof UnsupportedClassVersionError) {
++                isEnabled = false;
++            }
+         }
+         if (!isEnabled) {
+             LOGGER.info("Disabling {}", mixinPackage);
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 index 480df3b6..bc6c6f3c 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
@@ -2220,10 +2234,10 @@ index 4f3484aa..50857608 100644
      targetCompatibility = JavaVersion.VERSION_22
 diff --git a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..8edf94e1
+index 00000000..bd468fa7
 --- /dev/null
 +++ b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,33 @@
 +modLoader="lowcodefml"
 +loaderVersion="*"
 +license="MIT"
@@ -2257,9 +2271,6 @@ index 00000000..8edf94e1
 +versionRange = "*"
 +ordering = "NONE"
 +side = "BOTH"
-+
-+[features.c2me_opts_natives_math]
-+javaVersion = "[22,)"
 diff --git a/c2me-opts-natives-math/src/main/resources/fabric.mod.json b/c2me-opts-natives-math/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index b90edb5c..00000000
@@ -3391,7 +3402,7 @@ index eec6ae39..654e0671 100644
  rxjava_version=3.1.8
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 4073f255..f9b0bf75 100644
+index 4073f255..ffc53405 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -4,13 +4,16 @@ pluginManagement {
@@ -3412,13 +3423,11 @@ index 4073f255..f9b0bf75 100644
      dependencySubstitution {
          substitute module('com.ishland.flowsched:flowsched') using project(':')
      }
-@@ -38,8 +41,8 @@ include 'c2me-fixes-worldgen-threading-issues'
- //include 'c2me-fixes-worldgen-graal'
+@@ -39,7 +42,7 @@ include 'c2me-fixes-worldgen-threading-issues'
  include 'c2me-fixes-worldgen-vanilla-bugs'
  include 'c2me-opts-worldgen-vanilla'
--include 'c2me-opts-natives-math'
+ include 'c2me-opts-natives-math'
 -include 'c2me-opts-dfc'
-+//include 'c2me-opts-natives-math' // TODO no java22 support for neoforge
 +//include 'c2me-opts-dfc' // TODO NeoForge support
  //include 'c2me-opts-worldgen-biome-cache'
  include 'c2me-opts-worldgen-general'
