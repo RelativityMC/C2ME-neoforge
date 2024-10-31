@@ -52,7 +52,7 @@ jobs:
 
       - name: upload to modrinth and curseforge
         run: |
-          cd C2ME-fabric-patche
+          cd C2ME-fabric-patched
           ./gradlew modrinth curseforge
         if: github.ref == 'refs/heads/ver/1.21.1'
         env:
