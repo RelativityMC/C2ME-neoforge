@@ -1,5 +1,5 @@
 ## Understanding Patches
-Patches are very simple, but center around the directory `Starlight-Patched`
+Patches are very simple, but center around the directory `C2ME-fabric-patched`
 
 Assuming you already have forked the repository:
 
