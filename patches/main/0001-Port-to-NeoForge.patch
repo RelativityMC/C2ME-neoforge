@@ -2970,10 +2970,10 @@ index b4e63a8c..9b38530f 100644
                      })
                      .exceptionallyCompose(throwable -> {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index e7da3401..2013148e 100644
+index 3c91a2eb..13e6d00c 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-@@ -1,12 +1,10 @@
+@@ -1,7 +1,6 @@
  package com.ishland.c2me.rewrites.chunksystem.common.statuses;
  
  import com.google.common.base.Preconditions;
@@ -2981,12 +2981,7 @@ index e7da3401..2013148e 100644
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
  import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
- import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
--import com.ishland.c2me.rewrites.chunksystem.common.Config;
- import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
- import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
- import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
-@@ -66,9 +64,7 @@ public class ServerAccessible extends NewChunkStatus {
+@@ -99,9 +98,7 @@ public class ServerAccessible extends NewChunkStatus {
                  worldChunk.setLoadedToWorld(true);
                  worldChunk.updateAllBlockEntities();
                  worldChunk.addChunkTickSchedulers(serverWorld);
