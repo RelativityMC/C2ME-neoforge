@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 81b34561..af0b213b 100644
+index 81b34561..f47aa801 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -199,13 +199,13 @@ dependencies {
@@ -24,14 +24,7 @@ index 81b34561..af0b213b 100644
      changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
  }
  
-@@ -214,14 +214,15 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
-     curseforge {
-         apiKey = System.getenv("CURSEFORGE_TOKEN")
-         project {
--            id = '533097'
-+            id = '1131909'
-             changelogType = "markdown"
-             changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
+@@ -220,8 +220,9 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
              releaseType = 'alpha'
  
              addGameVersion project.minecraft_version
