@@ -407,7 +407,7 @@ index 00000000..c9a0e7c0
 +    }
 +}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
-index 39f4423e..86a58339 100644
+index 39f4423e..bfe4052e 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
 @@ -1,23 +1,41 @@
@@ -439,7 +439,7 @@ index 39f4423e..86a58339 100644
 -        PayloadTypeRegistry.playC2S().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
 +    public static void register(final RegisterPayloadHandlersEvent event) {
 +        if (registered.compareAndSet(false, true)) {
-+            event.registrar("1").playToServer(
++            event.registrar("1").optional().playToServer(
 +                    ID,
 +                    CODEC,
 +                    (arg, iPayloadContext) -> {
