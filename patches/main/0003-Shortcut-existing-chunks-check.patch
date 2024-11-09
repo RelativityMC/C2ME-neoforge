@@ -4,11 +4,37 @@ Date: Fri, 8 Nov 2024 22:51:42 +0800
 Subject: [PATCH] Shortcut existing chunks check
 
 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index d36a387b..be26cd06 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -44,6 +44,13 @@ public class Config {
+                     """)
+             .getBoolean(true, false);
+ 
++    public static final boolean shortcutOptionalChunkRequests = new ConfigSystem.ConfigAccessor()
++            .key("chunkSystem.shortcutOptionalChunkRequests")
++            .comment("""
++                    This option shortcuts optional chunk requests [NF only] [for debugging deadlocks]
++                    """)
++            .getBoolean(false, false);
++
+     public static void init() {
+         // intentionally empty
+     }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
-index c2968495..8531e65f 100644
+index c2968495..b7f6f297 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
-@@ -36,20 +36,64 @@ public abstract class MixinServerChunkManager {
+@@ -1,6 +1,7 @@
+ package com.ishland.c2me.rewrites.chunksystem.mixin;
+ 
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.c2me.rewrites.chunksystem.common.Config;
+ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+ import net.minecraft.server.world.ChunkHolder;
+@@ -36,22 +37,72 @@ public abstract class MixinServerChunkManager {
      @Shadow
      protected abstract @Nullable ChunkHolder getChunkHolder(long pos);
  
@@ -26,29 +52,35 @@ index c2968495..8531e65f 100644
 -                final CompletableFuture<OptionalChunk<Chunk>> future = holder.load(leastStatus, this.chunkLoadingManager); // thread-safe in new system
 -                Chunk chunk = future.getNow(ChunkHolder.UNLOADED).orElse(null);
 -                if (chunk instanceof WrapperProtoChunk readOnlyChunk) chunk = readOnlyChunk.getWrappedChunk();
+-                if (chunk != null) {
+-                    cir.setReturnValue(chunk); // also cancels
 +            Chunk chunk = this.c2me$fastpathExistingChunks(x, z, leastStatus);
 +            if (chunk != null) {
 +                cir.setReturnValue(chunk);
 +                return;
-+            } else if (!create) {
-+                cir.setReturnValue(null);
-+                return;
++            } else {
++                if (Config.shortcutOptionalChunkRequests) {
++                    if (!create) {
++                        cir.setReturnValue(null);
++                        return;
++                    }
++                }
 +            }
 +        } else { // on server thread
-+            if (!create) { // no create required
-+                Chunk chunk = this.c2me$getFromCahe(x, z, leastStatus, false);
-                 if (chunk != null) {
--                    cir.setReturnValue(chunk); // also cancels
--                    return;
-+                    cir.setReturnValue(chunk);
-+                } else {
-+                    cir.setReturnValue(this.c2me$fastpathExistingChunks(x, z, leastStatus));
-+                }
-+                return;
-+            }
-+        }
-+    }
-+
++            if (Config.shortcutOptionalChunkRequests) {
++                if (!create) { // no create required
++                    Chunk chunk = this.c2me$getFromCahe(x, z, leastStatus, false);
++                    if (chunk != null) {
++                        cir.setReturnValue(chunk);
++                    } else {
++                        cir.setReturnValue(this.c2me$fastpathExistingChunks(x, z, leastStatus));
++                    }
+                     return;
+                 }
+             }
+         }
+     }
+ 
 +    @Unique
 +    private Chunk c2me$getFromCahe(int x, int z, ChunkStatus leastStatus, boolean create) {
 +        long l = ChunkPos.toLong(x, z);
@@ -62,9 +94,9 @@ index c2968495..8531e65f 100644
 +                Chunk chunk = this.chunkCache[i];
 +                if (chunk != null || !create) {
 +                    return chunk;
-                 }
-             }
-         }
++                }
++            }
++        }
 +
 +        return null;
 +    }
@@ -77,6 +109,8 @@ index c2968495..8531e65f 100644
 +            return future.getNow(ChunkHolder.UNLOADED).orElse(null);
 +        }
 +        return null;
-     }
- 
++    }
++
      @Inject(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ServerChunkManager;updateChunks()Z", shift = At.Shift.AFTER))
+     private void updateHolderMapAfterTick(CallbackInfo ci) {
+         ((IThreadedAnvilChunkStorage) this.chunkLoadingManager).invokeUpdateHolderMap();
