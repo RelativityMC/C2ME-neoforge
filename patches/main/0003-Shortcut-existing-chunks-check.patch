@@ -23,7 +23,7 @@ index d36a387b..be26cd06 100644
          // intentionally empty
      }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
-index c2968495..b7f6f297 100644
+index c2968495..62341ff6 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
 @@ -1,6 +1,7 @@
@@ -69,7 +69,7 @@ index c2968495..b7f6f297 100644
 +        } else { // on server thread
 +            if (Config.shortcutOptionalChunkRequests) {
 +                if (!create) { // no create required
-+                    Chunk chunk = this.c2me$getFromCahe(x, z, leastStatus, false);
++                    Chunk chunk = this.c2me$getFromCache(x, z, leastStatus, false);
 +                    if (chunk != null) {
 +                        cir.setReturnValue(chunk);
 +                    } else {
@@ -82,7 +82,7 @@ index c2968495..b7f6f297 100644
      }
  
 +    @Unique
-+    private Chunk c2me$getFromCahe(int x, int z, ChunkStatus leastStatus, boolean create) {
++    private Chunk c2me$getFromCache(int x, int z, ChunkStatus leastStatus, boolean create) {
 +        long l = ChunkPos.toLong(x, z);
 +
 +        if (this.chunkPosCache == null || this.chunkStatusCache == null || this.chunkCache == null) {
