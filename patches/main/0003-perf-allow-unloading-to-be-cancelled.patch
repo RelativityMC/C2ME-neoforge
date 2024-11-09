@@ -33,7 +33,7 @@ index 5e4f2c23..052508d6 100644
              }
  
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index c1026825..0f2d3096 100644
+index c1026825..9500c367 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -11,6 +11,7 @@ import com.ishland.c2me.rewrites.chunksystem.common.Config;
@@ -68,7 +68,7 @@ index c1026825..0f2d3096 100644
 -    public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context) {
 +    public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
          return syncWithLightEngine(context).thenRunAsync(() -> {
-+            if (context.holder().getTargetStatus().ordinal() > this.ordinal()) { // saving cancelled
++            if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
 +                cancellable.cancel();
 +                throw new CancellationException();
 +            }
@@ -77,7 +77,7 @@ index c1026825..0f2d3096 100644
              Chunk chunk = chunkState.chunk();
              if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
-index 9b38530f..5c4e7b1e 100644
+index 9b38530f..18dbadc5 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
 @@ -20,6 +20,7 @@ import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.ProtoChunkExte
@@ -113,7 +113,7 @@ index 9b38530f..5c4e7b1e 100644
 +    public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
          final AtomicBoolean loadedToWorld = new AtomicBoolean(false);
          return syncWithLightEngine(context).thenApplyAsync(unused -> {
-+                    if (context.holder().getTargetStatus().ordinal() > this.ordinal()) { // saving cancelled
++                    if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
 +                        cancellable.cancel();
 +                        return CompletableFuture.<Void>failedFuture(new CancellationException());
 +                    }
