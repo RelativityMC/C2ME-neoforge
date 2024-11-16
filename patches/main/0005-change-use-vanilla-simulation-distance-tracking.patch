@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 11 Nov 2024 09:25:24 +0800
+Subject: [PATCH] change: use vanilla simulation distance tracking
+
+Cherry-picked from 827ed69d0b93a8a6f736abaaad9059e17cd1fe68
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+index 8f2562ab..c96c3f70 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+@@ -38,7 +38,6 @@ public class MixinChunkTicketManager implements IChunkTicketManager {
+     @Inject(method = "<init>", at = @At("RETURN"))
+     private void onInit(CallbackInfo ci) {
+         this.noTickSystem = new NoTickSystem((ChunkTicketManager) (Object) this);
+-        this.simulationDistanceTracker = new NoOPTickingMap();
+     }
+ 
+     @Inject(method = "handleChunkEnter", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkTicketManager$DistanceFromNearestPlayerTracker;updateLevel(JIZ)V", ordinal = 0, shift = At.Shift.AFTER))
+@@ -63,9 +62,6 @@ public class MixinChunkTicketManager implements IChunkTicketManager {
+ 
+     @Inject(method = "update", at = @At("RETURN"))
+     private void onTick(ServerChunkLoadingManager chunkStorage, CallbackInfoReturnable<Boolean> cir) {
+-        if (this.simulationDistanceTracker instanceof NoOPTickingMap map) {
+-            map.setTACS(chunkStorage);
+-        }
+         this.noTickSystem.afterTicketTicks();
+         this.noTickSystem.tick(chunkStorage);
+     }
