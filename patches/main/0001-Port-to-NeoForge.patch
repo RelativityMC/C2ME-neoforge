@@ -2992,6 +2992,19 @@ index 3c91a2eb..13e6d00c 100644
              }
  
              ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
+index 47209ffd..7746bcbc 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
+@@ -43,7 +43,7 @@ public abstract class MixinWorldChunk  extends Chunk {
+             List<ServerPlayerEntity> playersWatchingChunk = serverWorld.getChunkManager().chunkLoadingManager.getPlayersWatchingChunk(this.getPos(), false);
+             BlockEntityUpdateS2CPacket packet = BlockEntityUpdateS2CPacket.create(blockEntity);
+             for (ServerPlayerEntity player : playersWatchingChunk) {
+-                player.networkHandler.sendPacket(packet);
++                player.networkHandler.send(packet);
+             }
+ 
+             return blockEntity;
 diff --git a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..23b41ac3
@@ -3363,11 +3376,11 @@ index 00000000..7f2b7d2b
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/gradle.properties b/gradle.properties
-index eec6ae39..654e0671 100644
+index f0a3b060..bb00f7be 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
- org.gradle.jvmargs=-Xmx3G
+ org.gradle.jvmargs=-Xmx4G
  org.gradle.parallel=true
  org.gradle.warning.mode=all
 -fabric.loom.multiProjectOptimisation=true

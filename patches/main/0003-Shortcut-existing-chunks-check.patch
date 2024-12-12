@@ -23,7 +23,7 @@ index d36a387b..be26cd06 100644
          // intentionally empty
      }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
-index c2968495..62341ff6 100644
+index 1eee5bb0..f14ef5b8 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
 @@ -1,6 +1,7 @@
@@ -31,10 +31,10 @@ index c2968495..62341ff6 100644
  
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
 +import com.ishland.c2me.rewrites.chunksystem.common.Config;
+ import com.ishland.c2me.rewrites.chunksystem.common.ducks.IChunkSystemAccess;
  import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
  import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
- import net.minecraft.server.world.ChunkHolder;
-@@ -36,22 +37,72 @@ public abstract class MixinServerChunkManager {
+@@ -38,22 +39,72 @@ public abstract class MixinServerChunkManager {
      @Shadow
      protected abstract @Nullable ChunkHolder getChunkHolder(long pos);
  
