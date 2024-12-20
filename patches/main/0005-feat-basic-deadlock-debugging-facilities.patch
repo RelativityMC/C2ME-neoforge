@@ -1,0 +1,1238 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 11 Nov 2024 22:15:37 +0800
+Subject: [PATCH] feat: basic deadlock debugging facilities
+
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java
+new file mode 100644
+index 00000000..37848ff0
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java
+@@ -0,0 +1,7 @@
++package com.ishland.c2me.base.common.threadstate;
++
++public interface RunningWork {
++
++    String toString();
++
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/SyncLoadWork.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/SyncLoadWork.java
+new file mode 100644
+index 00000000..96d72c3e
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/SyncLoadWork.java
+@@ -0,0 +1,14 @@
++package com.ishland.c2me.base.common.threadstate;
++
++import net.minecraft.server.world.ServerWorld;
++import net.minecraft.util.math.ChunkPos;
++import net.minecraft.world.chunk.ChunkStatus;
++
++public record SyncLoadWork(ServerWorld world, ChunkPos chunkPos, ChunkStatus targetStatus, boolean create) implements RunningWork {
++
++    @Override
++    public String toString() {
++        return String.format("Sync load chunk %s to status %s in world %s (create=%s)", chunkPos, targetStatus, world.getRegistryKey().getValue(), create);
++    }
++
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java
+new file mode 100644
+index 00000000..36857000
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java
+@@ -0,0 +1,80 @@
++package com.ishland.c2me.base.common.threadstate;
++
++import com.google.common.util.concurrent.ThreadFactoryBuilder;
++
++import java.lang.management.ThreadInfo;
++import java.util.Collections;
++import java.util.Map;
++import java.util.Set;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.Executors;
++import java.util.concurrent.ScheduledExecutorService;
++import java.util.concurrent.TimeUnit;
++
++public class ThreadInstrumentation {
++
++    private static final ScheduledExecutorService CLEANER = Executors.newSingleThreadScheduledExecutor(
++            new ThreadFactoryBuilder()
++                    .setNameFormat("ThreadStateHolderCleaner")
++                    .setDaemon(true)
++                    .build()
++    );
++
++    private static final ConcurrentHashMap<Thread, ThreadState> threadStateMap = new ConcurrentHashMap<>();
++
++    private static final ThreadLocal<ThreadState> threadStateThreadLocal = ThreadLocal.withInitial(() -> getOrCreate(Thread.currentThread()));
++
++    static {
++        CLEANER.scheduleAtFixedRate(
++                () -> threadStateMap.entrySet().removeIf(entry -> !entry.getKey().isAlive()),
++                30,
++                30,
++                TimeUnit.SECONDS
++        );
++    }
++
++    public static ThreadState getOrCreate(Thread thread) {
++        return threadStateMap.computeIfAbsent(thread, unused -> new ThreadState());
++    }
++
++    public static ThreadState get(Thread thread) {
++        return threadStateMap.get(thread);
++    }
++
++    public static ThreadState getCurrent() {
++        return threadStateThreadLocal.get();
++    }
++
++    public static String printState(ThreadInfo threadInfo) {
++        return printState(threadInfo.getThreadName(), threadInfo.getThreadId(), findFromTid(threadInfo.getThreadId()));
++    }
++
++    public static Set<Map.Entry<Thread, ThreadState>> entrySet() {
++        return Collections.unmodifiableSet(threadStateMap.entrySet());
++    }
++
++    public static String printState(String name, long tid, ThreadState state) {
++        if (state != null) {
++            RunningWork[] runningWorks = state.toArray();
++            if (runningWorks.length != 0) {
++                StringBuilder builder = new StringBuilder();
++                builder.append("Task trace for thread \"").append(name).append("\" Id=").append(tid).append(" (obtained on a best-effort basis)\n");
++                for (RunningWork runningWork : runningWorks) {
++                    builder.append(runningWork.toString().indent(4)).append("\n");
++                }
++                return builder.toString();
++            }
++        }
++        return null;
++    }
++
++    private static ThreadState findFromTid(long tid) {
++        for (Map.Entry<Thread, ThreadState> entry : threadStateMap.entrySet()) {
++            if (entry.getKey().threadId() == tid) {
++                return entry.getValue();
++            }
++        }
++        return null;
++    }
++
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java
+new file mode 100644
+index 00000000..8359eb6a
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java
+@@ -0,0 +1,62 @@
++package com.ishland.c2me.base.common.threadstate;
++
++import java.io.Closeable;
++import java.util.ArrayDeque;
++import java.util.concurrent.locks.ReentrantReadWriteLock;
++
++public class ThreadState {
++
++    private final ArrayDeque<RunningWork> runningWorks = new ArrayDeque<>();
++    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
++
++    public void push(RunningWork runningWork) {
++        lock.writeLock().lock();
++        try {
++            runningWorks.push(runningWork);
++        } finally {
++            lock.writeLock().unlock();
++        }
++    }
++
++    public void pop(RunningWork runningWork) {
++        lock.writeLock().lock();
++        try {
++            RunningWork popped = runningWorks.peek();
++            if (popped != runningWork) {
++                IllegalArgumentException exception = new IllegalArgumentException("Corrupt ThreadState");
++                exception.printStackTrace();
++                throw exception;
++            }
++            runningWorks.pop();
++        } finally {
++            lock.writeLock().unlock();
++        }
++    }
++
++    public WorkClosable begin(RunningWork runningWork) {
++        lock.writeLock().lock();
++        try {
++            runningWorks.push(runningWork);
++            return new WorkClosable(this, runningWork);
++        } finally {
++            lock.writeLock().unlock();
++        }
++    }
++
++    public RunningWork[] toArray() {
++        lock.readLock().lock();
++        try {
++            return runningWorks.toArray(RunningWork[]::new);
++        } finally {
++            lock.readLock().unlock();
++        }
++    }
++
++    public static record WorkClosable(ThreadState state, RunningWork work) implements Closeable {
++        @Override
++        public void close() {
++            state.pop(work);
++        }
++    }
++
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/priority/MixinServerChunkManager.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
+similarity index 58%
+rename from c2me-base/src/main/java/com/ishland/c2me/base/mixin/priority/MixinServerChunkManager.java
+rename to c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
+index 271c6a30..c0b9cfe0 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/priority/MixinServerChunkManager.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
+@@ -1,10 +1,16 @@
+-package com.ishland.c2me.base.mixin.priority;
++package com.ishland.c2me.base.mixin.instrumentation;
+ 
+ import com.ishland.c2me.base.common.scheduler.ISyncLoadManager;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
++import com.ishland.c2me.base.common.threadstate.SyncLoadWork;
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
++import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
++import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
++import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+ import net.minecraft.server.world.ChunkHolder;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.server.world.ServerChunkManager;
++import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.math.ChunkPos;
+ import net.minecraft.world.chunk.Chunk;
+ import net.minecraft.world.chunk.ChunkStatus;
+@@ -15,9 +21,6 @@ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.Shadow;
+ import org.spongepowered.asm.mixin.Unique;
+ import org.spongepowered.asm.mixin.injection.At;
+-import org.spongepowered.asm.mixin.injection.Inject;
+-import org.spongepowered.asm.mixin.injection.Redirect;
+-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+ 
+ import java.util.function.BooleanSupplier;
+ 
+@@ -36,34 +39,40 @@ public abstract class MixinServerChunkManager implements ISyncLoadManager {
+     protected abstract ChunkHolder getChunkHolder(long pos);
+ 
+     @Shadow @Final public ServerChunkLoadingManager chunkLoadingManager;
++    @Shadow @Final private ServerWorld world;
+     @Unique
+     private volatile ChunkPos currentSyncLoadChunk = null;
+     @Unique
+     private volatile long syncLoadNanos = 0;
+ 
+     @Dynamic
+-    @Redirect(method = {
++    @WrapOperation(method = {
+             "getChunk(IILnet/minecraft/world/chunk/ChunkStatus;Z)Lnet/minecraft/world/chunk/Chunk;",
+             "getChunkBlocking(IILnet/minecraft/world/chunk/ChunkStatus;Z)Lnet/minecraft/world/chunk/Chunk;",
+             },
+             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ServerChunkManager$MainThreadExecutor;runTasks(Ljava/util/function/BooleanSupplier;)V"), require = 0)
+-    private void beforeAwaitChunk(ServerChunkManager.MainThreadExecutor instance, BooleanSupplier supplier, int x, int z, ChunkStatus leastStatus, boolean create) {
+-        if (Thread.currentThread() != this.serverThread || supplier.getAsBoolean()) return;
++    private void instrumentAwaitChunk(ServerChunkManager.MainThreadExecutor instance, BooleanSupplier stopCondition, Operation<Void> original, int x, int z, ChunkStatus leastStatus, boolean create) {
++        if (Thread.currentThread() != this.serverThread || stopCondition.getAsBoolean()) return;
+ 
+         this.currentSyncLoadChunk = new ChunkPos(x, z);
+         syncLoadNanos = System.nanoTime();
+         ((IVanillaChunkManager) this.chunkLoadingManager).c2me$getSchedulingManager().setCurrentSyncLoad(this.currentSyncLoadChunk);
+-        instance.runTasks(supplier);
++        try (var ignored = ThreadInstrumentation.getCurrent().begin(new SyncLoadWork(this.world, new ChunkPos(x, z), leastStatus, create))) {
++            original.call(instance, stopCondition);
++        } finally {
++            ((IVanillaChunkManager) this.chunkLoadingManager).c2me$getSchedulingManager().setCurrentSyncLoad(null);
++            this.currentSyncLoadChunk = null;
++        }
+     }
+ 
+-    @Inject(method = "getChunk(IILnet/minecraft/world/chunk/ChunkStatus;Z)Lnet/minecraft/world/chunk/Chunk;", at = @At("RETURN"))
+-    private void afterGetChunk(int x, int z, ChunkStatus leastStatus, boolean create, CallbackInfoReturnable<Chunk> cir) {
+-        if (Thread.currentThread() != this.serverThread) return;
+-
+-        if (this.currentSyncLoadChunk != null) {
+-            this.currentSyncLoadChunk = null;
+-//            System.out.println("Sync load took %.2fms".formatted((System.nanoTime() - syncLoadNanos) / 1e6));
+-            ((IVanillaChunkManager) this.chunkLoadingManager).c2me$getSchedulingManager().setCurrentSyncLoad(null);
++    @WrapMethod(method = "getChunk(IILnet/minecraft/world/chunk/ChunkStatus;Z)Lnet/minecraft/world/chunk/Chunk;")
++    private Chunk instrumentGetChunk(int x, int z, ChunkStatus leastStatus, boolean create, Operation<Chunk> original) {
++        if (Thread.currentThread() != this.serverThread) {
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new SyncLoadWork(this.world, new ChunkPos(x, z), leastStatus, create))) {
++                return original.call(x, z, leastStatus, create);
++            }
++        } else {
++            return original.call(x, z, leastStatus, create);
+         }
+     }
+ 
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
+new file mode 100644
+index 00000000..3afd8cba
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
+@@ -0,0 +1,58 @@
++package com.ishland.c2me.base.mixin.report;
++
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
++import com.ishland.c2me.base.common.threadstate.ThreadState;
++import com.llamalad7.mixinextras.sugar.Local;
++import net.minecraft.server.dedicated.DedicatedServerWatchdog;
++import net.minecraft.util.crash.CrashReport;
++import net.minecraft.util.crash.CrashReportSection;
++import org.slf4j.Logger;
++import org.spongepowered.asm.mixin.Final;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Shadow;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++
++import java.lang.management.ThreadInfo;
++import java.util.Map;
++
++@Mixin(DedicatedServerWatchdog.class)
++public class MixinDedicatedServerWatchdog {
++
++    @Shadow @Final private static Logger LOGGER;
++
++    @Inject(method = "run", at = @At(value = "INVOKE", target = "Ljava/lang/management/ThreadInfo;getThreadId()J"))
++    private void prependThreadInstrumentation(CallbackInfo ci, @Local StringBuilder stringBuilder, @Local ThreadInfo threadInfo) {
++        String state = null;
++        try {
++            state = ThreadInstrumentation.printState(threadInfo);
++        } catch (Throwable t) {
++            LOGGER.error("Failed to fetch state for thread {}", threadInfo);
++        }
++        if (state != null) {
++            stringBuilder.append(state);
++        }
++    }
++
++    @Inject(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0))
++    private void addInstrumentationData(CallbackInfo ci, @Local CrashReport crashReport) {
++        CrashReportSection section = crashReport.addElement("Thread trace dump (obtained on a best-effort basis)");
++        try {
++            for (Map.Entry<Thread, ThreadState> entry : ThreadInstrumentation.entrySet()) {
++                try {
++                    Thread thread = entry.getKey();
++                    String state = ThreadInstrumentation.printState(thread.getName(), thread.threadId(), entry.getValue());
++                    if (state != null) {
++                        section.add(thread.getName(), state);
++                    }
++                } catch (Throwable t) {
++                    LOGGER.error("Failed to dumping state for thread {}", entry.getKey(), t);
++                }
++            }
++        } catch (Throwable t) {
++            LOGGER.error("Failed to dump all known thread states", t);
++        }
++    }
++
++}
+diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
+index 0f08893f..67457b3c 100644
+--- a/c2me-base/src/main/resources/c2me-base.mixins.json
++++ b/c2me-base/src/main/resources/c2me-base.mixins.json
+@@ -51,7 +51,8 @@
+     "access.IXoroshiro128PlusPlusRandom",
+     "access.IXoroshiro128PlusPlusRandomDeriver",
+     "access.IXoroshiro128PlusPlusRandomImpl",
+-    "priority.MixinServerChunkManager",
++    "instrumentation.MixinServerChunkManager",
++    "report.MixinDedicatedServerWatchdog",
+     "scheduler.MixinThreadedAnvilChunkStorage",
+     "theinterface.MixinStorageIoWorker"
+   ],
+diff --git a/c2me-opts-chunk-access/build.gradle b/c2me-opts-chunk-access/build.gradle
+deleted file mode 100644
+index ec3b882d..00000000
+--- a/c2me-opts-chunk-access/build.gradle
++++ /dev/null
+@@ -1,11 +0,0 @@
+-moduleDependencies(project, [
+-        "c2me-base",
+-])
+-
+-jar {
+-    manifest {
+-        attributes([
+-                "MixinConfigs": "c2me-opts-chunk-access.mixins.json"
+-        ])
+-    }
+-}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
+deleted file mode 100644
+index 12e7ff12..00000000
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
++++ /dev/null
+@@ -1,15 +0,0 @@
+-package com.ishland.c2me.opts.chunk_access;
+-
+-import com.ishland.c2me.base.common.ModuleMixinPlugin;
+-import org.objectweb.asm.tree.ClassNode;
+-import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+-
+-public class MixinPlugin extends ModuleMixinPlugin {
+-
+-    @Override
+-    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+-        super.postApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+-//        ASMTransformerLithiumChunkAccessWorkaround.transform(targetClass);
+-    }
+-
+-}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/ModuleEntryPoint.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/ModuleEntryPoint.java
+deleted file mode 100644
+index 6954303c..00000000
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/ModuleEntryPoint.java
++++ /dev/null
+@@ -1,13 +0,0 @@
+-package com.ishland.c2me.opts.chunk_access;
+-
+-import com.ishland.c2me.base.common.config.ConfigSystem;
+-
+-public class ModuleEntryPoint {
+-
+-    public static final boolean enabled = new ConfigSystem.ConfigAccessor()
+-            .key("generalOptimizations.optimizeAsyncChunkRequest")
+-            .comment("Whether to let async chunk request no longer block server thread\n" +
+-                    "(may cause incompatibility with other mods)")
+-            .getBoolean(true, false);
+-
+-}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/common/CurrentWorldGenState.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/common/CurrentWorldGenState.java
+deleted file mode 100644
+index 862b7d80..00000000
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/common/CurrentWorldGenState.java
++++ /dev/null
+@@ -1,21 +0,0 @@
+-package com.ishland.c2me.opts.chunk_access.common;
+-
+-import net.minecraft.world.ChunkRegion;
+-
+-public class CurrentWorldGenState {
+-
+-    private static final ThreadLocal<ChunkRegion> currentRegion = new ThreadLocal<>();
+-
+-    public static ChunkRegion getCurrentRegion() {
+-        return currentRegion.get();
+-    }
+-
+-    public static void setCurrentRegion(ChunkRegion region) {
+-        currentRegion.set(region);
+-    }
+-
+-    public static void clearCurrentRegion() {
+-        currentRegion.remove();
+-    }
+-
+-}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/mixin/region_capture/MixinChunkGenerationStep.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/mixin/region_capture/MixinChunkGenerationStep.java
+deleted file mode 100644
+index 5de39afe..00000000
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/mixin/region_capture/MixinChunkGenerationStep.java
++++ /dev/null
+@@ -1,32 +0,0 @@
+-package com.ishland.c2me.opts.chunk_access.mixin.region_capture;
+-
+-import com.ishland.c2me.opts.chunk_access.common.CurrentWorldGenState;
+-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+-import net.minecraft.util.collection.BoundedRegionArray;
+-import net.minecraft.world.ChunkRegion;
+-import net.minecraft.world.chunk.AbstractChunkHolder;
+-import net.minecraft.world.chunk.Chunk;
+-import net.minecraft.world.chunk.ChunkGenerationContext;
+-import net.minecraft.world.chunk.ChunkGenerationStep;
+-import net.minecraft.world.chunk.GenerationTask;
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.injection.At;
+-
+-import java.util.concurrent.CompletableFuture;
+-
+-@Mixin(value = ChunkGenerationStep.class, priority = 1200)
+-public abstract class MixinChunkGenerationStep {
+-
+-    @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/GenerationTask;doWork(Lnet/minecraft/world/chunk/ChunkGenerationContext;Lnet/minecraft/world/chunk/ChunkGenerationStep;Lnet/minecraft/util/collection/BoundedRegionArray;Lnet/minecraft/world/chunk/Chunk;)Ljava/util/concurrent/CompletableFuture;"))
+-    public CompletableFuture<Chunk> runGenerationTask(GenerationTask instance, ChunkGenerationContext context, ChunkGenerationStep step, BoundedRegionArray<AbstractChunkHolder> chunks, Chunk chunk, Operation<CompletableFuture<Chunk>> original) {
+-        final ChunkRegion chunkRegion = new ChunkRegion(context.world(), chunks, step, chunk);
+-        try {
+-            CurrentWorldGenState.setCurrentRegion(chunkRegion);
+-            return original.call(instance, context, step, chunks, chunk);
+-        } finally {
+-            CurrentWorldGenState.clearCurrentRegion();
+-        }
+-    }
+-
+-}
+diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/package-info.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/package-info.java
+deleted file mode 100644
+index bbd6c6a5..00000000
+--- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/package-info.java
++++ /dev/null
+@@ -1 +0,0 @@
+-package com.ishland.c2me.opts.chunk_access;
+\ No newline at end of file
+diff --git a/c2me-opts-chunk-access/src/main/resources/c2me-opts-chunk-access.mixins.json b/c2me-opts-chunk-access/src/main/resources/c2me-opts-chunk-access.mixins.json
+deleted file mode 100644
+index 86cc1c34..00000000
+--- a/c2me-opts-chunk-access/src/main/resources/c2me-opts-chunk-access.mixins.json
++++ /dev/null
+@@ -1,10 +0,0 @@
+-{
+-  "parent": "c2me.mixins.json",
+-  "required": true,
+-  "package": "com.ishland.c2me.opts.chunk_access.mixin",
+-  "plugin": "com.ishland.c2me.opts.chunk_access.MixinPlugin",
+-  "mixins": [
+-    "asm.ASMTargets",
+-    "region_capture.MixinChunkGenerationStep"
+-  ]
+-}
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+index 9500c367..f7a06774 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+@@ -1,5 +1,6 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.common.util.RxJavaUtils;
+ import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+@@ -11,6 +12,7 @@ import com.ishland.c2me.rewrites.chunksystem.common.Config;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
+ import com.ishland.c2me.rewrites.chunksystem.common.ducks.IPOIUnloading;
+ import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
++import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.scheduler.Cancellable;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+ import com.ishland.flowsched.scheduler.KeyStatusPair;
+@@ -53,14 +55,16 @@ public class ReadFromDisk extends NewChunkStatus {
+         return finalizeLoading(context, single);
+     }
+ 
+-    protected static @NotNull CompletionStage<Void> finalizeLoading(ChunkLoadingContext context, Single<ProtoChunk> single) {
++    protected @NotNull CompletionStage<Void> finalizeLoading(ChunkLoadingContext context, Single<ProtoChunk> single) {
+         return single
+                 .doOnError(throwable -> ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().getServer().onChunkLoadFailure(throwable, ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(), context.holder().getKey()))
+                 .onErrorResumeNext(throwable -> {
+-                    if (Config.recoverFromErrors) {
+-                        return Single.just(createEmptyProtoChunk(context));
+-                    } else {
+-                        return Single.error(throwable);
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                        if (Config.recoverFromErrors) {
++                            return Single.just(createEmptyProtoChunk(context));
++                        } else {
++                            return Single.error(throwable);
++                        }
+                     }
+                 })
+                 .doOnSuccess(chunk -> context.holder().getItem().set(new ChunkState(chunk, chunk, ChunkStatus.EMPTY)))
+@@ -69,7 +73,7 @@ public class ReadFromDisk extends NewChunkStatus {
+                 .toCompletionStage(null);
+     }
+ 
+-    protected static @NonNull Single<ProtoChunk> invokeSyncRead(ChunkLoadingContext context) {
++    protected @NonNull Single<ProtoChunk> invokeSyncRead(ChunkLoadingContext context) {
+         return Single.defer(() -> Single.fromCompletionStage(((IThreadedAnvilChunkStorage) context.tacs()).invokeGetUpdatedChunkNbt(context.holder().getKey())))
+                 .map(nbt -> nbt.filter(nbt2 -> {
+                     boolean bl = nbt2.contains("Status", NbtElement.STRING_TYPE);
+@@ -81,17 +85,19 @@ public class ReadFromDisk extends NewChunkStatus {
+                 }))
+                 .observeOn(Schedulers.from(((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor()))
+                 .map(nbt -> {
+-                    if (nbt.isPresent()) {
+-                        ProtoChunk chunk = ChunkSerializer.deserialize(
+-                                ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
+-                                ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
+-                                ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
+-                                context.holder().getKey(),
+-                                nbt.get()
+-                        );
+-                        return chunk;
+-                    } else {
+-                        return createEmptyProtoChunk(context);
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                        if (nbt.isPresent()) {
++                            ProtoChunk chunk = ChunkSerializer.deserialize(
++                                    ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
++                                    ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
++                                    ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
++                                    context.holder().getKey(),
++                                    nbt.get()
++                            );
++                            return chunk;
++                        } else {
++                            return createEmptyProtoChunk(context);
++                        }
+                     }
+                 })
+                 .doOnError(throwable -> LOGGER.warn("Failed to load chunk at {}", context.holder().getKey(), throwable));
+@@ -105,53 +111,55 @@ public class ReadFromDisk extends NewChunkStatus {
+     @Override
+     public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
+         return syncWithLightEngine(context).thenRunAsync(() -> {
+-            if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
+-                cancellable.cancel();
+-                throw new CancellationException();
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
++                if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
++                    cancellable.cancel();
++                    throw new CancellationException();
++                }
++
++                final ChunkState chunkState = context.holder().getItem().get();
++                Chunk chunk = chunkState.chunk();
++                if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
++
++                final boolean loadedToWorld;
++                if (chunk instanceof WorldChunk worldChunk) {
++                    loadedToWorld = ((IWorldChunk) worldChunk).isLoadedToWorld();
++                    worldChunk.setLoadedToWorld(false);
++                } else {
++                    loadedToWorld = false;
++                }
++
++                if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
++                    LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
++                }
++
++                if ((context.holder().getFlags() & ItemHolder.FLAG_BROKEN) != 0 && chunk instanceof ProtoChunk) { // do not save broken ProtoChunks
++                    LOGGER.warn("Not saving partially generated broken chunk {}", context.holder().getKey());
++                } else if (chunk instanceof WorldChunk && !chunkState.reachedStatus().isAtLeast(ChunkStatus.FULL)) {
++                    // do not save WorldChunks that doesn't reach full status: Vanilla behavior
++                    // If saved, block entities will be lost
++                } else {
++                    ((IThreadedAnvilChunkStorage) context.tacs()).invokeSave(chunk);
++                }
++
++                if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
++                    ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
++                }
++
++                ((IServerLightingProvider) ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider()).invokeUpdateChunkStatus(chunk.getPos());
++                ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider().tick();
++                ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener().setChunkStatus(chunk.getPos(), null);
++                ((IThreadedAnvilChunkStorage) context.tacs()).getChunkToNextSaveTimeMs().remove(chunk.getPos().toLong());
++
++                final WorldGenerationProgressListener listener = ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener();
++                if (listener != null) {
++                    listener.setChunkStatus(context.holder().getKey(), null);
++                }
++
++                ((IPOIUnloading) ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage()).c2me$unloadPoi(context.holder().getKey());
++
++                context.holder().getItem().set(new ChunkState(null, null, null));
+             }
+-
+-            final ChunkState chunkState = context.holder().getItem().get();
+-            Chunk chunk = chunkState.chunk();
+-            if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
+-
+-            final boolean loadedToWorld;
+-            if (chunk instanceof WorldChunk worldChunk) {
+-                loadedToWorld = ((IWorldChunk) worldChunk).isLoadedToWorld();
+-                worldChunk.setLoadedToWorld(false);
+-            } else {
+-                loadedToWorld = false;
+-            }
+-
+-            if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
+-                LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+-            }
+-
+-            if ((context.holder().getFlags() & ItemHolder.FLAG_BROKEN) != 0 && chunk instanceof ProtoChunk) { // do not save broken ProtoChunks
+-                LOGGER.warn("Not saving partially generated broken chunk {}", context.holder().getKey());
+-            } else if (chunk instanceof WorldChunk && !chunkState.reachedStatus().isAtLeast(ChunkStatus.FULL)) {
+-                // do not save WorldChunks that doesn't reach full status: Vanilla behavior
+-                // If saved, block entities will be lost
+-            } else {
+-                ((IThreadedAnvilChunkStorage) context.tacs()).invokeSave(chunk);
+-            }
+-
+-            if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
+-                ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
+-            }
+-
+-            ((IServerLightingProvider) ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider()).invokeUpdateChunkStatus(chunk.getPos());
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider().tick();
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener().setChunkStatus(chunk.getPos(), null);
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getChunkToNextSaveTimeMs().remove(chunk.getPos().toLong());
+-
+-            final WorldGenerationProgressListener listener = ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener();
+-            if (listener != null) {
+-                listener.setChunkStatus(context.holder().getKey(), null);
+-            }
+-
+-            ((IPOIUnloading) ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage()).c2me$unloadPoi(context.holder().getKey());
+-
+-            context.holder().getItem().set(new ChunkState(null, null, null));
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+index 18dbadc5..47229eb6 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+@@ -4,6 +4,7 @@ import com.ishland.c2me.base.common.GlobalExecutors;
+ import com.ishland.c2me.base.common.registry.SerializerAccess;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
+ import com.ishland.c2me.base.common.theinterface.IDirectStorage;
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.common.util.HookCompatibility;
+ import com.ishland.c2me.base.common.util.RxJavaUtils;
+ import com.ishland.c2me.base.mixin.access.ISerializingRegionBasedStorage;
+@@ -20,6 +21,7 @@ import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.ProtoChunkExte
+ import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.SerializingRegionBasedStorageExtension;
+ import com.ishland.c2me.rewrites.chunksystem.common.ducks.IPOIUnloading;
+ import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
++import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.scheduler.Cancellable;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+ import com.ishland.flowsched.scheduler.KeyStatusPair;
+@@ -73,7 +75,7 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+         return finalizeLoading(context, single);
+     }
+ 
+-    protected static Single<ProtoChunk> invokeAsyncLoad(ChunkLoadingContext context) {
++    protected Single<ProtoChunk> invokeAsyncLoad(ChunkLoadingContext context) {
+         return Single.defer(() -> Single.fromCompletionStage(((IThreadedAnvilChunkStorage) context.tacs()).invokeGetUpdatedChunkNbt(context.holder().getKey())))
+                 .map(nbt -> nbt.filter(nbt2 -> {
+                     boolean bl = nbt2.contains("Status", NbtElement.STRING_TYPE);
+@@ -85,37 +87,41 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+                 }))
+                 .observeOn(Schedulers.from(((IVanillaChunkManager) context.tacs()).c2me$getSchedulingManager().positionedExecutor(context.holder().getKey().toLong())))
+                 .map(nbt -> {
+-                    final ReferenceArrayList<Runnable> mainThreadQueue = new ReferenceArrayList<>();
+-                    if (nbt.isPresent()) {
+-                        ChunkIoMainThreadTaskUtils.push(mainThreadQueue);
+-                        try {
+-                            return Pair.of(mainThreadQueue, ChunkSerializer.deserialize(
+-                                    ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
+-                                    ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
+-                                    ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
+-                                    context.holder().getKey(),
+-                                    nbt.get()
+-                            ));
+-                        } finally {
+-                            ChunkIoMainThreadTaskUtils.pop(mainThreadQueue);
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                        final ReferenceArrayList<Runnable> mainThreadQueue = new ReferenceArrayList<>();
++                        if (nbt.isPresent()) {
++                            ChunkIoMainThreadTaskUtils.push(mainThreadQueue);
++                            try {
++                                return Pair.of(mainThreadQueue, ChunkSerializer.deserialize(
++                                        ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
++                                        ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
++                                        ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
++                                        context.holder().getKey(),
++                                        nbt.get()
++                                ));
++                            } finally {
++                                ChunkIoMainThreadTaskUtils.pop(mainThreadQueue);
++                            }
++                        } else {
++                            return Pair.of(mainThreadQueue, createEmptyProtoChunk(context));
+                         }
+-                    } else {
+-                        return Pair.of(mainThreadQueue, createEmptyProtoChunk(context));
+                     }
+                 })
+                 .flatMap(pair -> {
+-                    final ServerWorld world = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+-                    ProtoChunk protoChunk = pair.right();
+-                    // blending
+-                    final ChunkPos pos = context.holder().getKey();
+-                    protoChunk = protoChunk != null ? protoChunk : new ProtoChunk(pos, UpgradeData.NO_UPGRADE_DATA, world, world.getRegistryManager().get(RegistryKeys.BIOME), null);
+-                    if (protoChunk.getBelowZeroRetrogen() != null || protoChunk.getStatus().getChunkType() == ChunkType.PROTOCHUNK) {
+-                        ProtoChunk finalProtoChunk = protoChunk;
+-                        return Single.defer(() -> Single.fromCompletionStage(BlendingInfoUtil.getBlendingInfos(((IVersionedChunkStorage) context.tacs()).getWorker(), pos)))
+-                                .doOnSuccess(bitSets -> ((ProtoChunkExtension) finalProtoChunk).setBlendingInfo(pos, bitSets))
+-                                .map(unused -> pair);
+-                    } else {
+-                        return Single.just(pair);
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                        final ServerWorld world = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
++                        ProtoChunk protoChunk = pair.right();
++                        // blending
++                        final ChunkPos pos = context.holder().getKey();
++                        protoChunk = protoChunk != null ? protoChunk : new ProtoChunk(pos, UpgradeData.NO_UPGRADE_DATA, world, world.getRegistryManager().get(RegistryKeys.BIOME), null);
++                        if (protoChunk.getBelowZeroRetrogen() != null || protoChunk.getStatus().getChunkType() == ChunkType.PROTOCHUNK) {
++                            ProtoChunk finalProtoChunk = protoChunk;
++                            return Single.defer(() -> Single.fromCompletionStage(BlendingInfoUtil.getBlendingInfos(((IVersionedChunkStorage) context.tacs()).getWorker(), pos)))
++                                    .doOnSuccess(bitSets -> ((ProtoChunkExtension) finalProtoChunk).setBlendingInfo(pos, bitSets))
++                                    .map(unused -> pair);
++                        } else {
++                            return Single.just(pair);
++                        }
+                     }
+                 })
+                 .zipWith(
+@@ -127,7 +133,9 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+                 )
+                 .observeOn(Schedulers.from(((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor()))
+                 .map(pair -> {
+-                    ChunkIoMainThreadTaskUtils.drainQueue(pair.left());
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                        ChunkIoMainThreadTaskUtils.drainQueue(pair.left());
++                    }
+                     return pair.right();
+                 });
+     }
+@@ -136,51 +144,55 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+     public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
+         final AtomicBoolean loadedToWorld = new AtomicBoolean(false);
+         return syncWithLightEngine(context).thenApplyAsync(unused -> {
+-                    if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
+-                        cancellable.cancel();
+-                        return CompletableFuture.<Void>failedFuture(new CancellationException());
+-                    }
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
++                        if (context.holder().getTargetStatus().ordinal() >= this.ordinal()) { // saving cancelled
++                            cancellable.cancel();
++                            return CompletableFuture.<Void>failedFuture(new CancellationException());
++                        }
+ 
+-                    final ChunkState chunkState = context.holder().getItem().get();
+-                    Chunk chunk = chunkState.chunk();
+-                    if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
++                        final ChunkState chunkState = context.holder().getItem().get();
++                        Chunk chunk = chunkState.chunk();
++                        if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
+ 
+-                    if (chunk instanceof WorldChunk worldChunk) {
+-                        loadedToWorld.set(((IWorldChunk) worldChunk).isLoadedToWorld());
+-                        worldChunk.setLoadedToWorld(false);
+-                    }
++                        if (chunk instanceof WorldChunk worldChunk) {
++                            loadedToWorld.set(((IWorldChunk) worldChunk).isLoadedToWorld());
++                            worldChunk.setLoadedToWorld(false);
++                        }
+ 
+-                    if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
+-                        LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+-                    }
++                        if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
++                            LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
++                        }
+ 
+-                    if ((context.holder().getFlags() & ItemHolder.FLAG_BROKEN) != 0 && chunk instanceof ProtoChunk) { // do not save broken ProtoChunks
+-                        LOGGER.warn("Not saving partially generated broken chunk {}", context.holder().getKey());
+-                        return CompletableFuture.completedStage((Void) null);
+-                    } else if (chunk instanceof WorldChunk && !chunkState.reachedStatus().isAtLeast(ChunkStatus.FULL)) {
+-                        // do not save WorldChunks that doesn't reach full status: Vanilla behavior
+-                        // If saved, block entities will be lost
+-                        return CompletableFuture.completedStage((Void) null);
+-                    } else {
+-                        return asyncSave(context.tacs(), chunk);
++                        if ((context.holder().getFlags() & ItemHolder.FLAG_BROKEN) != 0 && chunk instanceof ProtoChunk) { // do not save broken ProtoChunks
++                            LOGGER.warn("Not saving partially generated broken chunk {}", context.holder().getKey());
++                            return CompletableFuture.completedStage((Void) null);
++                        } else if (chunk instanceof WorldChunk && !chunkState.reachedStatus().isAtLeast(ChunkStatus.FULL)) {
++                            // do not save WorldChunks that doesn't reach full status: Vanilla behavior
++                            // If saved, block entities will be lost
++                            return CompletableFuture.completedStage((Void) null);
++                        } else {
++                            return asyncSave(context.tacs(), chunk);
++                        }
+                     }
+                 }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor())
+                 .thenCompose(Function.identity())
+                 .thenAcceptAsync(unused -> {
+-                    Chunk chunk = context.holder().getItem().get().chunk();
+-                    if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
+-                    if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
+-                        ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
+-                    }
++                    try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
++                        Chunk chunk = context.holder().getItem().get().chunk();
++                        if (chunk instanceof WrapperProtoChunk protoChunk) chunk = protoChunk.getWrappedChunk();
++                        if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
++                            ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
++                        }
+ 
+-                    ((IServerLightingProvider) ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider()).invokeUpdateChunkStatus(chunk.getPos());
+-                    ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider().tick();
+-                    ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener().setChunkStatus(chunk.getPos(), null);
+-                    ((IThreadedAnvilChunkStorage) context.tacs()).getChunkToNextSaveTimeMs().remove(chunk.getPos().toLong());
++                        ((IServerLightingProvider) ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider()).invokeUpdateChunkStatus(chunk.getPos());
++                        ((IThreadedAnvilChunkStorage) context.tacs()).getLightingProvider().tick();
++                        ((IThreadedAnvilChunkStorage) context.tacs()).getWorldGenerationProgressListener().setChunkStatus(chunk.getPos(), null);
++                        ((IThreadedAnvilChunkStorage) context.tacs()).getChunkToNextSaveTimeMs().remove(chunk.getPos().toLong());
+ 
+-                    ((IPOIUnloading) ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage()).c2me$unloadPoi(context.holder().getKey());
++                        ((IPOIUnloading) ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage()).c2me$unloadPoi(context.holder().getKey());
+ 
+-                    context.holder().getItem().set(new ChunkState(null, null, null));
++                        context.holder().getItem().set(new ChunkState(null, null, null));
++                    }
+                 }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+@@ -196,30 +208,34 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+ 
+             AsyncSerializationManager.Scope scope = new AsyncSerializationManager.Scope(chunk, ((IThreadedAnvilChunkStorage) tacs).getWorld());
+             return CompletableFuture.supplyAsync(() -> {
+-                        scope.open();
+-                        AsyncSerializationManager.push(scope);
+-                        try {
+-                            return SerializerAccess.getSerializer().serialize(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk, !chunkSaveEventFree);
+-                        } finally {
+-                            AsyncSerializationManager.pop(scope);
++                        try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk.getPos(), this, false))) {
++                            scope.open();
++                            AsyncSerializationManager.push(scope);
++                            try {
++                                return SerializerAccess.getSerializer().serialize(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk, !chunkSaveEventFree);
++                            } finally {
++                                AsyncSerializationManager.pop(scope);
++                            }
+                         }
+                     }, GlobalExecutors.prioritizedScheduler.executor(16) /* boost priority as we are serializing an unloaded chunk */)
+                     .thenCompose((either) -> {
+-                        if (either.left().isPresent()) {
+-                            if (chunkSaveEventFree) {
+-                                tacs.setNbt(chunkPos, either.left().get());
+-                                return CompletableFuture.completedFuture(null);
++                        try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk.getPos(), this, false))) {
++                            if (either.left().isPresent()) {
++                                if (chunkSaveEventFree) {
++                                    tacs.setNbt(chunkPos, either.left().get());
++                                    return CompletableFuture.completedFuture(null);
++                                } else {
++                                    NbtCompound nbt = either.left().get();
++                                    return CompletableFuture.runAsync(() -> NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, ((IThreadedAnvilChunkStorage) tacs).getWorld(), nbt)), ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor())
++                                            .thenRun(() -> tacs.setNbt(chunkPos, nbt));
++                                }
+                             } else {
+-                                NbtCompound nbt = either.left().get();
+-                                return CompletableFuture.runAsync(() -> NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, ((IThreadedAnvilChunkStorage) tacs).getWorld(), nbt)), ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor())
+-                                        .thenRun(() -> tacs.setNbt(chunkPos, nbt));
+-                            }
+-                        } else {
+-                            if (!chunkSaveEventFree) {
+-                                LOGGER.warn("Chunk serializer returned byte[] for {} directly despite not chunkSaveEventFree, events will not be called", chunkPos);
++                                if (!chunkSaveEventFree) {
++                                    LOGGER.warn("Chunk serializer returned byte[] for {} directly despite not chunkSaveEventFree, events will not be called", chunkPos);
++                                }
++                                ((IDirectStorage) ((IVersionedChunkStorage) tacs).getWorker()).setRawChunkData(chunkPos, either.right().get());
++                                return CompletableFuture.completedFuture(null);
+                             }
+-                            ((IDirectStorage) ((IVersionedChunkStorage) tacs).getWorker()).setRawChunkData(chunkPos, either.right().get());
+-                            return CompletableFuture.completedFuture(null);
+                         }
+                     })
+                     .exceptionallyCompose(throwable -> {
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+index db0496e1..ba15f858 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+@@ -1,6 +1,7 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+ import com.google.common.base.Preconditions;
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.base.mixin.access.IWorldChunk;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+@@ -9,6 +10,7 @@ import com.ishland.c2me.rewrites.chunksystem.common.Config;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
+ import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
++import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.scheduler.Cancellable;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+ import com.ishland.flowsched.scheduler.KeyStatusPair;
+@@ -64,22 +66,24 @@ public class ServerAccessible extends NewChunkStatus {
+         ProtoChunk protoChunk = (ProtoChunk) chunk;
+ 
+         if (Config.suppressGhostMushrooms) {
+-            ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+-            ChunkRegion chunkRegion = new ChunkRegion(serverWorld, context.chunks(), ChunkGenerationSteps.GENERATION.get(ChunkStatus.FULL), chunk);
+-
+-            ChunkPos chunkPos = context.holder().getKey();
+-
+-            ShortList[] postProcessingLists = protoChunk.getPostProcessingLists();
+-            for (int i = 0; i < postProcessingLists.length; i++) {
+-                if (postProcessingLists[i] != null) {
+-                    for (ShortListIterator iterator = postProcessingLists[i].iterator(); iterator.hasNext(); ) {
+-                        short short_ = iterator.nextShort();
+-                        BlockPos blockPos = ProtoChunk.joinBlockPos(short_, protoChunk.sectionIndexToCoord(i), chunkPos);
+-                        BlockState blockState = protoChunk.getBlockState(blockPos);
+-
+-                        if (blockState.getBlock() == Blocks.BROWN_MUSHROOM || blockState.getBlock() == Blocks.RED_MUSHROOM) {
+-                            if (!blockState.canPlaceAt(chunkRegion, blockPos)) {
+-                                protoChunk.setBlockState(blockPos, Blocks.AIR.getDefaultState(), false); // TODO depends on the fact that the chunk system always locks the current chunk
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
++                ChunkRegion chunkRegion = new ChunkRegion(serverWorld, context.chunks(), ChunkGenerationSteps.GENERATION.get(ChunkStatus.FULL), chunk);
++
++                ChunkPos chunkPos = context.holder().getKey();
++
++                ShortList[] postProcessingLists = protoChunk.getPostProcessingLists();
++                for (int i = 0; i < postProcessingLists.length; i++) {
++                    if (postProcessingLists[i] != null) {
++                        for (ShortListIterator iterator = postProcessingLists[i].iterator(); iterator.hasNext(); ) {
++                            short short_ = iterator.nextShort();
++                            BlockPos blockPos = ProtoChunk.joinBlockPos(short_, protoChunk.sectionIndexToCoord(i), chunkPos);
++                            BlockState blockState = protoChunk.getBlockState(blockPos);
++
++                            if (blockState.getBlock() == Blocks.BROWN_MUSHROOM || blockState.getBlock() == Blocks.RED_MUSHROOM) {
++                                if (!blockState.canPlaceAt(chunkRegion, blockPos)) {
++                                    protoChunk.setBlockState(blockPos, Blocks.AIR.getDefaultState(), false); // TODO depends on the fact that the chunk system always locks the current chunk
++                                }
+                             }
+                         }
+                     }
+@@ -88,24 +92,26 @@ public class ServerAccessible extends NewChunkStatus {
+         }
+ 
+         return CompletableFuture.runAsync(() -> {
+-            ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+-            final WorldChunk worldChunk = toFullChunk(protoChunk, serverWorld);
+-
+-            worldChunk.setLevelTypeProvider(context.holder().getUserData().get()::getLevelType);
+-            context.holder().getItem().set(new ChunkState(worldChunk, new WrapperProtoChunk(worldChunk, false), ChunkStatus.FULL));
+-            if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
+-                worldChunk.loadEntities();
+-                worldChunk.setLoadedToWorld(true);
+-                worldChunk.updateAllBlockEntities();
+-                worldChunk.addChunkTickSchedulers(serverWorld);
+-                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
+-            }
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
++                final WorldChunk worldChunk = toFullChunk(protoChunk, serverWorld);
++
++                worldChunk.setLevelTypeProvider(context.holder().getUserData().get()::getLevelType);
++                context.holder().getItem().set(new ChunkState(worldChunk, new WrapperProtoChunk(worldChunk, false), ChunkStatus.FULL));
++                if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
++                    worldChunk.loadEntities();
++                    worldChunk.setLoadedToWorld(true);
++                    worldChunk.updateAllBlockEntities();
++                    worldChunk.addChunkTickSchedulers(serverWorld);
++                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
++                }
+ 
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+-            ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
++                ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
++                ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+ 
+-            if (needSendChunks()) {
+-                sendChunkToPlayer(context.tacs(), context.holder());
++                if (needSendChunks()) {
++                    sendChunkToPlayer(context.tacs(), context.holder());
++                }
+             }
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+@@ -147,13 +153,15 @@ public class ServerAccessible extends NewChunkStatus {
+         final Chunk chunk = state.chunk();
+         Preconditions.checkState(chunk instanceof WorldChunk, "Chunk must be a full chunk");
+         return CompletableFuture.runAsync(() -> {
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().remove(context.holder().getKey().toLong());
+-            ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+-            final WorldChunk worldChunk = (WorldChunk) chunk;
+-//            worldChunk.setLoadedToWorld(false);
+-//            worldChunk.removeChunkTickSchedulers(((IThreadedAnvilChunkStorage) context.tacs()).getWorld());
+-            worldChunk.setLevelTypeProvider(null);
+-            context.holder().getItem().set(new ChunkState(state.protoChunk(), state.protoChunk(), ChunkStatus.FULL));
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
++                ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().remove(context.holder().getKey().toLong());
++                ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
++                final WorldChunk worldChunk = (WorldChunk) chunk;
++//                worldChunk.setLoadedToWorld(false);
++//                worldChunk.removeChunkTickSchedulers(((IThreadedAnvilChunkStorage) context.tacs()).getWorld());
++                worldChunk.setLevelTypeProvider(null);
++                context.holder().getItem().set(new ChunkState(state.protoChunk(), state.protoChunk(), ChunkStatus.FULL));
++            }
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
+index 7e20a745..db208837 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
+@@ -1,9 +1,11 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.scheduler.Cancellable;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+ import com.ishland.flowsched.scheduler.KeyStatusPair;
+@@ -38,11 +40,13 @@ public class ServerBlockTicking extends NewChunkStatus {
+     @Override
+     public CompletionStage<Void> upgradeToThis(ChunkLoadingContext context, Cancellable cancellable) {
+         return CompletableFuture.runAsync(() -> {
+-            final WorldChunk chunk = (WorldChunk) context.holder().getItem().get().chunk();
+-            chunk.runPostProcessing();
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().disableTickSchedulers(chunk);
+-            sendChunkToPlayer(context);
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getTotalChunksLoadedCount().incrementAndGet(); // never decremented in vanilla
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                final WorldChunk chunk = (WorldChunk) context.holder().getItem().get().chunk();
++                chunk.runPostProcessing();
++                ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().disableTickSchedulers(chunk);
++                sendChunkToPlayer(context);
++                ((IThreadedAnvilChunkStorage) context.tacs()).getTotalChunksLoadedCount().incrementAndGet(); // never decremented in vanilla
++            }
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/VanillaWorldGenerationDelegate.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/VanillaWorldGenerationDelegate.java
+index 4dac0889..b1ba07ca 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/VanillaWorldGenerationDelegate.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/VanillaWorldGenerationDelegate.java
+@@ -3,10 +3,12 @@ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ import com.ishland.c2me.base.common.scheduler.LockTokenImpl;
+ import com.ishland.c2me.base.common.scheduler.ScheduledTask;
+ import com.ishland.c2me.base.common.scheduler.SchedulingManager;
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.executor.LockToken;
+ import com.ishland.flowsched.scheduler.Cancellable;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+@@ -14,7 +16,13 @@ import com.ishland.flowsched.scheduler.KeyStatusPair;
+ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+ import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+ import net.minecraft.util.math.ChunkPos;
+-import net.minecraft.world.chunk.*;
++import net.minecraft.world.chunk.Chunk;
++import net.minecraft.world.chunk.ChunkGenerationContext;
++import net.minecraft.world.chunk.ChunkGenerationStep;
++import net.minecraft.world.chunk.ChunkGenerationSteps;
++import net.minecraft.world.chunk.ChunkStatus;
++import net.minecraft.world.chunk.GenerationDependencies;
++import net.minecraft.world.chunk.ProtoChunk;
+ import org.jetbrains.annotations.Nullable;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -109,24 +117,32 @@ public class VanillaWorldGenerationDelegate extends NewChunkStatus {
+         final ChunkGenerationContext chunkGenerationContext = ((IThreadedAnvilChunkStorage) context.tacs()).getGenerationContext();
+         Chunk chunk = state.chunk();
+         if (chunk.getStatus().isAtLeast(status)) {
+-            return ChunkGenerationSteps.LOADING.get(status)
+-                    .run(((IThreadedAnvilChunkStorage) context.tacs()).getGenerationContext(), context.chunks(), chunk)
+-                    .whenComplete((chunk1, throwable) -> {
+-                        if (chunk1 != null) {
+-                            context.holder().getItem().set(new ChunkState(chunk1, (ProtoChunk) chunk1, this.status));
+-                        }
+-                    }).thenAccept(__ -> {});
++            try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                return ChunkGenerationSteps.LOADING.get(status)
++                        .run(((IThreadedAnvilChunkStorage) context.tacs()).getGenerationContext(), context.chunks(), chunk)
++                        .whenComplete((chunk1, throwable) -> {
++                            if (chunk1 != null) {
++                                context.holder().getItem().set(new ChunkState(chunk1, (ProtoChunk) chunk1, this.status));
++                            }
++                        }).thenAccept(__ -> {
++                        });
++            }
+         } else {
+             final ChunkGenerationStep step = ChunkGenerationSteps.GENERATION.get(status);
+ 
+             int radius = Math.max(0, step.blockStateWriteRadius());
+             return runTaskWithLock(chunk.getPos(), radius, context.schedulingManager(),
+-                    () -> step.run(chunkGenerationContext, context.chunks(), chunk)
+-                            .whenComplete((chunk1, throwable) -> {
+-                                if (chunk1 != null) {
+-                                    context.holder().getItem().set(new ChunkState(chunk1, (ProtoChunk) chunk1, this.status));
+-                                }
+-                            }).thenAccept(__ -> {})
++                    () -> {
++                        try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
++                            return step.run(chunkGenerationContext, context.chunks(), chunk)
++                                    .whenComplete((chunk1, throwable) -> {
++                                        if (chunk1 != null) {
++                                            context.holder().getItem().set(new ChunkState(chunk1, (ProtoChunk) chunk1, this.status));
++                                        }
++                                    }).thenAccept(__ -> {
++                                    });
++                        }
++                    }
+             );
+         }
+     }
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java
+new file mode 100644
+index 00000000..b04b141f
+--- /dev/null
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java
+@@ -0,0 +1,39 @@
++package com.ishland.c2me.rewrites.chunksystem.common.threadstate;
++
++import com.ishland.c2me.base.common.threadstate.RunningWork;
++import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import net.minecraft.server.world.ServerWorld;
++import net.minecraft.util.math.ChunkPos;
++
++public record ChunkTaskWork(ServerWorld world, ChunkPos chunkPos, NewChunkStatus status, boolean isUpgrade) implements RunningWork {
++
++    public ChunkTaskWork(ChunkLoadingContext context, NewChunkStatus status, boolean isUpgrade) {
++        this(
++                ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
++                context.holder().getKey(),
++                status,
++                isUpgrade
++        );
++    }
++
++    @Override
++    public String toString() {
++        if (isUpgrade) {
++            return String.format(
++                    "Upgrading chunk %s to %s in world %s",
++                    chunkPos,
++                    status,
++                    world.getRegistryKey().getValue()
++            );
++        } else {
++            return String.format(
++                    "Downgrading chunk %s from %s in world %s",
++                    chunkPos,
++                    status,
++                    world.getRegistryKey().getValue()
++            );
++        }
++    }
++}
+diff --git a/settings.gradle b/settings.gradle
+index ffc53405..1e6a4082 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -49,7 +49,6 @@ include 'c2me-opts-allocs'
+ include 'c2me-opts-math'
+ include 'c2me-opts-scheduling'
+ include 'c2me-opts-chunkio'
+-include 'c2me-opts-chunk-access'
+ include 'c2me-rewrites-chunk-serializer'
+ include 'c2me-rewrites-chunkio'
+ include 'c2me-rewrites-chunk-system'
