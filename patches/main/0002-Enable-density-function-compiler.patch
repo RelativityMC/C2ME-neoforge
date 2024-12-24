@@ -42,7 +42,7 @@ index 00000000..3471039f
 +
 +}
 diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
-index 5644d9cd..ceb73c50 100644
+index 5644d9cd..9a7bbb64 100644
 --- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
 +++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
 @@ -1,13 +1,13 @@
@@ -103,7 +103,7 @@ index 5644d9cd..ceb73c50 100644
 +        m.invokestatic(
 +                Type.getInternalName(InvocationShim.class),
 +                "invokeDensityFunctionFill",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class)),
++                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(DensityFunction.class), Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class)),
 +                false
          );
          m.areturn(Type.VOID_TYPE);
