@@ -661,10 +661,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 0a1f33e7..0f08893f 100644
+index 0acd763e..48f56132 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -53,8 +53,9 @@
+@@ -54,8 +54,9 @@
      "access.IXoroshiro128PlusPlusRandomImpl",
      "priority.MixinServerChunkManager",
      "scheduler.MixinThreadedAnvilChunkStorage",

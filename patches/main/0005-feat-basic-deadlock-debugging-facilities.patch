@@ -344,10 +344,10 @@ index 00000000..3afd8cba
 +
 +}
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 0f08893f..67457b3c 100644
+index 48f56132..2197c6f2 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -51,7 +51,8 @@
+@@ -52,7 +52,8 @@
      "access.IXoroshiro128PlusPlusRandom",
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
