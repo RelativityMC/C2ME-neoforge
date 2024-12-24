@@ -1,0 +1,466 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Tue, 24 Dec 2024 15:05:33 +0800
+Subject: [PATCH] Enable density function compiler
+
+
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java
+new file mode 100644
+index 00000000..3471039f
+--- /dev/null
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java
+@@ -0,0 +1,31 @@
++package com.ishland.c2me.opts.dfc.common.ast;
++
++import net.minecraft.util.math.MathHelper;
++import net.minecraft.world.gen.densityfunction.DensityFunction;
++
++/**
++ * All called from generated code
++ */
++public class InvocationShim {
++
++    public static double invokeDensityFunctionSample(DensityFunction densityFunction, DensityFunction.NoisePos pos) {
++        return densityFunction.sample(pos);
++    }
++
++    public static void invokeDensityFunctionFill(DensityFunction densityFunction, double[] densities, DensityFunction.EachApplier applier) {
++        densityFunction.fill(densities, applier);
++    }
++
++    public static double invokeMathHelperClampedMap(double value, double oldStart, double oldEnd, double newStart, double newEnd) {
++        return MathHelper.clampedMap(value, oldStart, oldEnd, newStart, newEnd);
++    }
++
++    public static double invokeDensityFunctionNoiseSample(DensityFunction.Noise noise, double x, double y, double z) {
++        return noise.sample(x, y, z);
++    }
++
++    public static float invokeMathHelperLerp(float delta, float start, float end) {
++        return MathHelper.lerp(delta, start, end);
++    }
++
++}
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
+index 5644d9cd..ceb73c50 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
+@@ -1,13 +1,13 @@
+ package com.ishland.c2me.opts.dfc.common.ast.misc;
+ 
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+ import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
+ import com.ishland.c2me.opts.dfc.common.vif.EachApplierVanillaInterface;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
+ import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import org.objectweb.asm.Label;
+ import org.objectweb.asm.Type;
+@@ -62,10 +62,11 @@ public class DelegateNode implements AstNode {
+         m.load(3, Type.INT_TYPE);
+         m.load(4, InstructionAdapter.OBJECT_TYPE);
+         m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
+-        m.invokeinterface(
+-                Type.getInternalName(DensityFunction.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40464", "(Lnet/minecraft/class_6910$class_6912;)D"),
+-                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.NoisePos.class))
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
++                false
+         );
+         m.areturn(Type.DOUBLE_TYPE);
+     }
+@@ -99,10 +100,11 @@ public class DelegateNode implements AstNode {
+         m.aload(Type.INT_TYPE);
+         m.load(5, InstructionAdapter.OBJECT_TYPE);
+         m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
+-        m.invokeinterface(
+-                Type.getInternalName(DensityFunction.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40464", "(Lnet/minecraft/class_6910$class_6912;)D"),
+-                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.NoisePos.class))
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
++                false
+         );
+ 
+         m.astore(Type.DOUBLE_TYPE);
+@@ -121,10 +123,11 @@ public class DelegateNode implements AstNode {
+         m.load(5, InstructionAdapter.OBJECT_TYPE);
+         m.load(6, InstructionAdapter.OBJECT_TYPE);
+         m.invokespecial(Type.getInternalName(EachApplierVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(int[].class), Type.getType(int[].class), Type.getType(int[].class), Type.getType(EvalType.class), Type.getType(ArrayCache.class)), false);
+-        m.invokeinterface(
+-                Type.getInternalName(DensityFunction.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40470", "([DLnet/minecraft/class_6910$class_6911;)V"),
+-                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class))
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionFill",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class)),
++                false
+         );
+         m.areturn(Type.VOID_TYPE);
+     }
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
+index 997e027e..967bb381 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
+@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.misc;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.util.math.MathHelper;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -56,8 +56,8 @@ public class YClampedGradientNode implements AstNode {
+         m.dconst(this.fromValue);
+         m.dconst(this.toValue);
+         m.invokestatic(
+-                Type.getInternalName(MathHelper.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_32854", "(DDDDD)D"),
++                Type.getInternalName(InvocationShim.class),
++                "invokeMathHelperClampedMap",
+                 "(DDDDD)D",
+                 false
+         );
+@@ -80,8 +80,8 @@ public class YClampedGradientNode implements AstNode {
+                 m.dconst(this.fromValue);
+                 m.dconst(this.toValue);
+                 m.invokestatic(
+-                        Type.getInternalName(MathHelper.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_32854", "(DDDDD)D"),
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeMathHelperClampedMap",
+                         "(DDDDD)D",
+                         false
+                 );
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
+index 98078817..b027e032 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
+@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -67,10 +67,10 @@ public class DFTNoiseNode implements AstNode {
+         m.dconst(this.xzScale);
+         m.mul(Type.DOUBLE_TYPE);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(DensityFunction.Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.areturn(Type.DOUBLE_TYPE);
+@@ -109,10 +109,10 @@ public class DFTNoiseNode implements AstNode {
+                 m.dconst(this.xzScale);
+                 m.mul(Type.DOUBLE_TYPE);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(DensityFunction.Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+             }
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
+index c47c3e5f..d26a08a4 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
+@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -60,10 +60,10 @@ public class DFTShiftANode implements AstNode {
+         m.dconst(0.25);
+         m.mul(Type.DOUBLE_TYPE);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(DensityFunction.Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.dconst(4.0);
+@@ -99,10 +99,10 @@ public class DFTShiftANode implements AstNode {
+                 m.dconst(0.25);
+                 m.mul(Type.DOUBLE_TYPE);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(DensityFunction.Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+                 m.dconst(4.0);
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
+index 2fd85b5c..47bc5a9a 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
+@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -60,10 +60,10 @@ public class DFTShiftBNode implements AstNode {
+ 
+         m.dconst(0.0);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(DensityFunction.Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.dconst(4.0);
+@@ -99,10 +99,10 @@ public class DFTShiftBNode implements AstNode {
+ 
+                 m.dconst(0.0);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(DensityFunction.Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+                 m.dconst(4.0);
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
+index 0441375e..8f1f58d7 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
+@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -63,10 +63,10 @@ public class DFTShiftNode implements AstNode {
+         m.dconst(0.25);
+         m.mul(Type.DOUBLE_TYPE);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(DensityFunction.Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.dconst(4.0);
+@@ -107,10 +107,10 @@ public class DFTShiftNode implements AstNode {
+                 m.dconst(0.25);
+                 m.mul(Type.DOUBLE_TYPE);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(DensityFunction.Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+                 m.dconst(4.0);
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
+index 554a1a28..1b80bca5 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
+@@ -5,8 +5,8 @@ import com.ishland.c2me.base.mixin.access.IDensityFunctionsCaveScaler;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
+ import org.objectweb.asm.Type;
+@@ -101,10 +101,10 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
+         m.load(scale, Type.DOUBLE_TYPE);
+         m.div(Type.DOUBLE_TYPE);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(DensityFunction.Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.invokestatic(
+@@ -177,10 +177,10 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
+                 m.load(scale, Type.DOUBLE_TYPE);
+                 m.div(Type.DOUBLE_TYPE);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(DensityFunction.Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+                 m.invokestatic(
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
+index 8e213701..e9d1ac60 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
+@@ -3,9 +3,10 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+ import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
+-import net.fabricmc.loader.api.FabricLoader;
++import net.minecraft.world.gen.densityfunction.DensityFunction;
+ import net.minecraft.world.gen.densityfunction.DensityFunction.Noise;
+ import org.objectweb.asm.Type;
+ import org.objectweb.asm.commons.InstructionAdapter;
+@@ -104,10 +105,10 @@ public class ShiftedNoiseNode implements AstNode {
+         context.callDelegateSingle(m, shiftZMethod);
+         m.add(Type.DOUBLE_TYPE);
+ 
+-        m.invokevirtual(
+-                Type.getInternalName(Noise.class),
+-                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                "(DDD)D",
++        m.invokestatic(
++                Type.getInternalName(InvocationShim.class),
++                "invokeDensityFunctionNoiseSample",
++                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                 false
+         );
+         m.areturn(Type.DOUBLE_TYPE);
+@@ -199,10 +200,10 @@ public class ShiftedNoiseNode implements AstNode {
+                 m.aload(Type.DOUBLE_TYPE);
+                 m.add(Type.DOUBLE_TYPE);
+ 
+-                m.invokevirtual(
+-                        Type.getInternalName(Noise.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
+-                        "(DDD)D",
++                m.invokestatic(
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeDensityFunctionNoiseSample",
++                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
+                         false
+                 );
+             }
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
+index d3ed9c2c..88c485cf 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
+@@ -3,13 +3,13 @@ package com.ishland.c2me.opts.dfc.common.ast.spline;
+ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
+ import com.ishland.c2me.opts.dfc.common.ast.EvalType;
++import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
+ import com.ishland.c2me.opts.dfc.common.ast.McToAst;
+ import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+ import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
+ import com.ishland.flowsched.util.Assertions;
+ import it.unimi.dsi.fastutil.Pair;
+ import it.unimi.dsi.fastutil.ints.IntObjectPair;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.util.math.MathHelper;
+ import net.minecraft.util.math.Spline;
+ import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
+@@ -351,8 +351,8 @@ public class SplineAstNode implements AstNode {
+                 m.load(n, Type.FLOAT_TYPE);
+                 m.load(o, Type.FLOAT_TYPE);
+                 m.invokestatic(
+-                        Type.getInternalName(MathHelper.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_16439", "(FFF)F"),
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeMathHelperLerp",
+                         "(FFF)F",
+                         false
+                 );
+@@ -365,8 +365,8 @@ public class SplineAstNode implements AstNode {
+                 m.load(p, Type.FLOAT_TYPE);
+                 m.load(q, Type.FLOAT_TYPE);
+                 m.invokestatic(
+-                        Type.getInternalName(MathHelper.class),
+-                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_16439", "(FFF)F"),
++                        Type.getInternalName(InvocationShim.class),
++                        "invokeMathHelperLerp",
+                         "(FFF)F",
+                         false
+                 );
+diff --git a/settings.gradle b/settings.gradle
+index ffc53405..37fe66a2 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -42,7 +42,7 @@ include 'c2me-fixes-worldgen-threading-issues'
+ include 'c2me-fixes-worldgen-vanilla-bugs'
+ include 'c2me-opts-worldgen-vanilla'
+ include 'c2me-opts-natives-math'
+-//include 'c2me-opts-dfc' // TODO NeoForge support
++include 'c2me-opts-dfc'
+ //include 'c2me-opts-worldgen-biome-cache'
+ include 'c2me-opts-worldgen-general'
+ include 'c2me-opts-allocs'

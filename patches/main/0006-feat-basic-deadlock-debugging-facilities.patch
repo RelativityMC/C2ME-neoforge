@@ -1225,7 +1225,7 @@ index 00000000..b04b141f
 +    }
 +}
 diff --git a/settings.gradle b/settings.gradle
-index ffc53405..1e6a4082 100644
+index 37fe66a2..26b4f540 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -49,7 +49,6 @@ include 'c2me-opts-allocs'
