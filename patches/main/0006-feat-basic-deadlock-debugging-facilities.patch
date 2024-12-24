@@ -39,7 +39,7 @@ index 00000000..96d72c3e
 +}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java
 new file mode 100644
-index 00000000..36857000
+index 00000000..e4be3891
 --- /dev/null
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadInstrumentation.java
 @@ -0,0 +1,80 @@
@@ -105,7 +105,7 @@ index 00000000..36857000
 +                StringBuilder builder = new StringBuilder();
 +                builder.append("Task trace for thread \"").append(name).append("\" Id=").append(tid).append(" (obtained on a best-effort basis)\n");
 +                for (RunningWork runningWork : runningWorks) {
-+                    builder.append(runningWork.toString().indent(4)).append("\n");
++                    builder.append(runningWork.toString().indent(4)); // newline included in indent()
 +                }
 +                return builder.toString();
 +            }
