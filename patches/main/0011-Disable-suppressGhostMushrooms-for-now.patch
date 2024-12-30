@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 30 Dec 2024 23:41:13 +0800
+Subject: [PATCH] Disable suppressGhostMushrooms for now
+
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index 3c314cf8..429088b8 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -42,7 +42,7 @@ public class Config {
+                     
+                     This should not affect other worldgen behavior and game mechanics in general
+                     """)
+-            .getBoolean(true, false);
++            .getBoolean(false, false);
+ 
+     public static final boolean syncPlayerTickets = new ConfigSystem.ConfigAccessor()
+             .key("chunkSystem.syncPlayerTickets")
