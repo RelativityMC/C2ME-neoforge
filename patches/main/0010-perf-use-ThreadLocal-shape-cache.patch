@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 30 Dec 2024 22:45:20 +0800
+Subject: [PATCH] perf: use ThreadLocal shape cache
+
+
+diff --git a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/tlcache/MixinBlock.java b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/tlcache/MixinBlock.java
+new file mode 100644
+index 00000000..353cdd02
+--- /dev/null
++++ b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/tlcache/MixinBlock.java
+@@ -0,0 +1,45 @@
++package com.ishland.c2me.opts.worldgen.vanilla.mixin.tlcache;
++
++import it.unimi.dsi.fastutil.objects.Object2BooleanLinkedOpenHashMap;
++import net.minecraft.block.Block;
++import net.minecraft.util.function.BooleanBiFunction;
++import net.minecraft.util.shape.VoxelShape;
++import net.minecraft.util.shape.VoxelShapes;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Overwrite;
++import org.spongepowered.asm.mixin.Unique;
++
++@Mixin(Block.class)
++public class MixinBlock {
++
++    @Unique
++    private static final ThreadLocal<Object2BooleanLinkedOpenHashMap<VoxelShape>> c2me$full_cube_shape_cache_tl =
++            ThreadLocal.withInitial(() -> new Object2BooleanLinkedOpenHashMap<>(256, 0.25F) {
++                @Override
++                protected void rehash(int newN) {
++                    if (newN > n) {
++                        super.rehash(newN);
++                    }
++                }
++            });
++
++    /**
++     * @author ishland
++     * @reason use ThreadLocal cache
++     */
++    @Overwrite
++    public static boolean isShapeFullCube(VoxelShape shape) {
++        Object2BooleanLinkedOpenHashMap<VoxelShape> map = c2me$full_cube_shape_cache_tl.get();
++        if (map.containsKey(shape)) {
++            return map.getAndMoveToFirst(shape);
++        } else {
++            boolean uncached = !VoxelShapes.matchesAnywhere(VoxelShapes.fullCube(), shape, BooleanBiFunction.NOT_SAME);
++            if (map.size() >= 256) {
++                map.removeLastBoolean();
++            }
++            map.putAndMoveToFirst(shape, uncached);
++            return uncached;
++        }
++    }
++
++}
+diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json b/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
+index 0aaed8a5..bf29c6f6 100644
+--- a/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
++++ b/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
+@@ -7,6 +7,7 @@
+     "aquifer.MixinAquiferSamplerImpl",
+     "aquifer.MixinNoiseChunkGenerator",
+     "structure_weight_sampler.MixinStructureWeightSampler",
+-    "the_end_biome_cache.MixinTheEndBiomeSource"
++    "the_end_biome_cache.MixinTheEndBiomeSource",
++    "tlcache.MixinBlock"
+   ]
+ }
