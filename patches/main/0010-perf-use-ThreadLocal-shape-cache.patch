@@ -56,12 +56,12 @@ index 00000000..353cdd02
 +
 +}
 diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json b/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
-index 0aaed8a5..bf29c6f6 100644
+index 59e5989b..1cd1b2ca 100644
 --- a/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
 +++ b/c2me-opts-worldgen-vanilla/src/main/resources/c2me-opts-worldgen-vanilla.mixins.json
-@@ -7,6 +7,7 @@
+@@ -6,6 +6,7 @@
+   "mixins": [
      "aquifer.MixinAquiferSamplerImpl",
-     "aquifer.MixinNoiseChunkGenerator",
      "structure_weight_sampler.MixinStructureWeightSampler",
 -    "the_end_biome_cache.MixinTheEndBiomeSource"
 +    "the_end_biome_cache.MixinTheEndBiomeSource",
