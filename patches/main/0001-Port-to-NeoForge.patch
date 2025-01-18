@@ -2835,6 +2835,58 @@ index 11104c69..4f5ad227 100644
 +        ])
 +    }
 +}
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
+index e6a1c51e..b5d915a8 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
+@@ -1,8 +1,8 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.compat.lithium;
+ 
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.math.ChunkPos;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -22,8 +22,8 @@ public class LithiumChunkStatusTrackerInvoker {
+         try {
+             clazzChunkStatusTracker = Class.forName("net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker");
+         } catch (ClassNotFoundException e) {
+-            if (FabricLoader.getInstance().isModLoaded("lithium")) {
+-                LOGGER.warn("Couldn't find net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker, yet fabric claims lithium is there. Curious");
++            if (lithiumExists()) {
++                LOGGER.warn("Couldn't find net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker, yet FML claims lithium is there. Curious");
+             }
+             clazzChunkStatusTracker = null;
+         }
+@@ -32,20 +32,24 @@ public class LithiumChunkStatusTrackerInvoker {
+             try {
+                 methodOnChunkInaccessible = clazzChunkStatusTracker.getMethod("onChunkInaccessible", ServerWorld.class, ChunkPos.class);
+             } catch (NoSuchMethodException e) {
+-                LOGGER.warn("Couldn't find net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker#onChunkInaccessible(ServerWorld, ChunkPos), yet fabric claims lithium is there. Curious");
++                LOGGER.warn("Couldn't find net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker#onChunkInaccessible(ServerWorld, ChunkPos), yet FML claims lithium is there. Curious");
+                 methodOnChunkInaccessible = null;
+             }
+             if (methodOnChunkInaccessible != null) {
+                 try {
+                     mh_onChunkInaccessible = MethodHandles.lookup().unreflect(methodOnChunkInaccessible);
+                 } catch (IllegalAccessException e) {
+-                    LOGGER.warn("Couldn't access net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker#onChunkInaccessible(ServerWorld, ChunkPos), yet fabric claims lithium is there. Curious", e);
++                    LOGGER.warn("Couldn't access net.caffeinemc.mods.lithium.common.world.chunk.ChunkStatusTracker#onChunkInaccessible(ServerWorld, ChunkPos), yet FML claims lithium is there. Curious", e);
+                 }
+             }
+         }
+         MH_onChunkInaccessible = mh_onChunkInaccessible;
+     }
+ 
++    private static boolean lithiumExists() {
++        return FMLLoader.getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("lithium"));
++    }
++
+     public static void invokeOnChunkInaccessible(ServerWorld world, ChunkPos pos) {
+         if (MH_onChunkInaccessible != null) {
+             try {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 index e6fc18a3..2268c457 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
@@ -2870,7 +2922,7 @@ index e6fc18a3..2268c457 100644
              t.printStackTrace();
          }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index 1c16af46..c1026825 100644
+index 97e80743..9500c367 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -1,6 +1,5 @@
@@ -2880,7 +2932,7 @@ index 1c16af46..c1026825 100644
  import com.ishland.c2me.base.common.util.RxJavaUtils;
  import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
-@@ -116,7 +115,7 @@ public class ReadFromDisk extends NewChunkStatus {
+@@ -123,7 +122,7 @@ public class ReadFromDisk extends NewChunkStatus {
                  loadedToWorld = false;
              }
  
@@ -2890,7 +2942,7 @@ index 1c16af46..c1026825 100644
              }
  
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
-index b4e63a8c..9b38530f 100644
+index 5634cdbe..620b492b 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
 @@ -1,10 +1,10 @@
@@ -2905,7 +2957,7 @@ index b4e63a8c..9b38530f 100644
  import com.ishland.c2me.base.common.util.RxJavaUtils;
  import com.ishland.c2me.base.mixin.access.ISerializingRegionBasedStorage;
  import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
-@@ -26,6 +26,7 @@ import io.reactivex.rxjava3.core.Single;
+@@ -27,6 +27,7 @@ import io.reactivex.rxjava3.core.Single;
  import io.reactivex.rxjava3.schedulers.Schedulers;
  import it.unimi.dsi.fastutil.Pair;
  import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
@@ -2913,7 +2965,7 @@ index b4e63a8c..9b38530f 100644
  import net.minecraft.nbt.NbtElement;
  import net.minecraft.registry.RegistryKeys;
  import net.minecraft.server.world.ServerChunkLoadingManager;
-@@ -39,6 +40,8 @@ import net.minecraft.world.chunk.ProtoChunk;
+@@ -40,6 +41,8 @@ import net.minecraft.world.chunk.ProtoChunk;
  import net.minecraft.world.chunk.UpgradeData;
  import net.minecraft.world.chunk.WorldChunk;
  import net.minecraft.world.chunk.WrapperProtoChunk;
@@ -2922,16 +2974,18 @@ index b4e63a8c..9b38530f 100644
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -140,7 +143,7 @@ public class ReadFromDiskAsync extends ReadFromDisk {
-                         worldChunk.setLoadedToWorld(false);
+@@ -172,9 +175,7 @@ public class ReadFromDiskAsync extends ReadFromDisk {
                      }
  
--                    if (loadedToWorld.get() && ModStatuses.fabric_lifecycle_events_v1 && chunk instanceof WorldChunk worldChunk) {
-+                    if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
-                         LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+                     if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
+-                        if (ModStatuses.fabric_lifecycle_events_v1) {
+-                            LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+-                        }
++                        LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+                         ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
                      }
  
-@@ -182,21 +185,34 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+@@ -197,21 +198,34 @@ public class ReadFromDiskAsync extends ReadFromDisk {
              chunk.setNeedsSaving(false);
              ChunkPos chunkPos = chunk.getPos();
  
@@ -2970,7 +3024,7 @@ index b4e63a8c..9b38530f 100644
                      })
                      .exceptionallyCompose(throwable -> {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 3c91a2eb..13e6d00c 100644
+index d7078509..7c651fdf 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,7 +1,6 @@
@@ -2981,7 +3035,7 @@ index 3c91a2eb..13e6d00c 100644
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
  import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
-@@ -99,9 +98,7 @@ public class ServerAccessible extends NewChunkStatus {
+@@ -100,9 +99,7 @@ public class ServerAccessible extends NewChunkStatus {
                  worldChunk.setLoadedToWorld(true);
                  worldChunk.updateAllBlockEntities();
                  worldChunk.addChunkTickSchedulers(serverWorld);
