@@ -3059,6 +3059,41 @@ index 47209ffd..7746bcbc 100644
              }
  
              return blockEntity;
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
+index 4e579810..49f106a8 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
+@@ -2,6 +2,8 @@ package com.ishland.c2me.rewrites.chunksystem.mixin.async_serialization;
+ 
+ import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.AsyncSerializationManager;
+ import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.ChunkIoMainThreadTaskUtils;
++import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
++import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+ import net.minecraft.nbt.NbtCompound;
+ import net.minecraft.registry.RegistryWrapper;
+ import net.minecraft.util.math.BlockPos;
+@@ -10,6 +12,8 @@ import net.minecraft.world.ChunkSerializer;
+ import net.minecraft.world.chunk.Chunk;
+ import net.minecraft.world.chunk.ChunkSection;
+ import net.minecraft.world.poi.PointOfInterestStorage;
++import net.neoforged.bus.api.Event;
++import net.neoforged.bus.api.IEventBus;
+ import org.slf4j.Logger;
+ import org.spongepowered.asm.mixin.Final;
+ import org.spongepowered.asm.mixin.Mixin;
+@@ -29,6 +33,12 @@ public class MixinChunkSerializer {
+         ChunkIoMainThreadTaskUtils.executeMain(() -> instance.initForPalette(chunkSectionPos, chunkSection));
+     }
+ 
++    @WrapOperation(method = "deserialize", at = @At(value = "INVOKE", target = "Lnet/neoforged/bus/api/IEventBus;post(Lnet/neoforged/bus/api/Event;)Lnet/neoforged/bus/api/Event;"), require = 2)
++    private static <T extends Event> T onEventInvocation(IEventBus instance, T t, Operation<T> original) {
++        ChunkIoMainThreadTaskUtils.executeMain(() -> original.call(instance, t));
++        return t;
++    }
++
+     @Redirect(method = "serialize", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;getBlockEntityPositions()Ljava/util/Set;"))
+     private static Set<BlockPos> onChunkGetBlockEntityPositions(Chunk chunk) {
+         final AsyncSerializationManager.Scope scope = AsyncSerializationManager.getScope(chunk.getPos());
 diff --git a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..23b41ac3
