@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Sat, 16 Nov 2024 19:35:09 +0800
+Subject: [PATCH] new: turn fluid postprocessing into scheduled tick
+
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/MixinPlugin.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/MixinPlugin.java
+index e87d386b..5ce06731 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/MixinPlugin.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/MixinPlugin.java
+@@ -10,6 +10,8 @@ public class MixinPlugin extends ModuleMixinPlugin {
+         if (!super.shouldApplyMixin(targetClassName, mixinClassName))
+             return false;
+ 
++        if (mixinClassName.startsWith("com.ishland.c2me.rewrites.chunksystem.mixin.fluid_postprocessing"))
++            return Config.fluidPostProcessingToScheduledTick;
+         if (mixinClassName.startsWith("com.ishland.c2me.rewrites.chunksystem.mixin.async_chunkio."))
+             return Config.asyncSerialization;
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index 429088b8..c3a7c5c7 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -58,6 +58,17 @@ public class Config {
+                     """)
+             .getBoolean(true, false);
+ 
++    public static final boolean fluidPostProcessingToScheduledTick = new ConfigSystem.ConfigAccessor()
++            .key("chunkSystem.fluidPostProcessingToScheduledTick")
++            .comment("""
++                    Whether to turn fluid postprocessing into scheduled tick
++                    
++                    Fluid post-processing is very expensive when loading in new chunks, and this can affect
++                    MSPT significantly. This option delays fluid post-processing to scheduled tick to hopefully
++                    mitigate this issue.
++                    """)
++            .getBoolean(true, false);
++
+     public static void init() {
+         // intentionally empty
+     }
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/fluid_postprocessing/MixinWorldChunk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/fluid_postprocessing/MixinWorldChunk.java
+new file mode 100644
+index 00000000..181178c0
+--- /dev/null
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/fluid_postprocessing/MixinWorldChunk.java
+@@ -0,0 +1,19 @@
++package com.ishland.c2me.rewrites.chunksystem.mixin.fluid_postprocessing;
++
++import net.minecraft.fluid.FluidState;
++import net.minecraft.util.math.BlockPos;
++import net.minecraft.world.World;
++import net.minecraft.world.chunk.WorldChunk;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Redirect;
++
++@Mixin(WorldChunk.class)
++public class MixinWorldChunk {
++
++    @Redirect(method = "runPostProcessing", at = @At(value = "INVOKE", target = "Lnet/minecraft/fluid/FluidState;onScheduledTick(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V"))
++    private void redirectFluidScheduledTick(FluidState instance, World world, BlockPos pos) {
++        world.scheduleFluidTick(pos, instance.getFluid(), 1);
++    }
++
++}
+diff --git a/c2me-rewrites-chunk-system/src/main/resources/c2me-rewrites-chunk-system.mixins.json b/c2me-rewrites-chunk-system/src/main/resources/c2me-rewrites-chunk-system.mixins.json
+index 29ea0fe7..d54edac4 100644
+--- a/c2me-rewrites-chunk-system/src/main/resources/c2me-rewrites-chunk-system.mixins.json
++++ b/c2me-rewrites-chunk-system/src/main/resources/c2me-rewrites-chunk-system.mixins.json
+@@ -23,6 +23,7 @@
+     "async_serialization.MixinStorageIoWorker",
+     "async_serialization.MixinThreadedAnvilChunkStorage",
+     "async_serialization.gc_free_serializer.MixinChunkDataSerializer",
+-    "fixes.MixinServerEntityManager"
++    "fixes.MixinServerEntityManager",
++    "fluid_postprocessing.MixinWorldChunk"
+   ]
+ }
