@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Thu, 2 Jan 2025 21:39:27 +0800
+Subject: [PATCH] fix: no-tick pending chunk loads counter
+
+Backported from 6073966852cea0d5ffcf5048831766753dace91a
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+index aabdfd8e..b2a9c4ce 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+@@ -114,16 +114,6 @@ public class PlayerNoTickLoader {
+         }
+ 
+         this.tickFutures();
+-
+-        {
+-            long pendingLoadsCount = 0L;
+-            ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iterator = this.iterators.long2ReferenceEntrySet().fastIterator();
+-            while (iterator.hasNext()) {
+-                Long2ReferenceMap.Entry<ChunkIterator> entry = iterator.next();
+-                pendingLoadsCount += entry.getValue().remaining();
+-            }
+-            this.pendingLoadsCountSnapshot = pendingLoadsCount;
+-        }
+     }
+ 
+     private void clearTickets() {
+@@ -142,6 +132,16 @@ public class PlayerNoTickLoader {
+ 
+         if (this.closing.get()) return;
+         while (this.chunkLoadFutures.size() < Config.maxConcurrentChunkLoads && this.addOneTicket());
++
++        {
++            long pendingLoadsCount = 0L;
++            ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iterator = this.iterators.long2ReferenceEntrySet().fastIterator();
++            while (iterator.hasNext()) {
++                Long2ReferenceMap.Entry<ChunkIterator> entry = iterator.next();
++                pendingLoadsCount += entry.getValue().remaining();
++            }
++            this.pendingLoadsCountSnapshot = pendingLoadsCount;
++        }
+     }
+ 
+     private boolean addOneTicket() {

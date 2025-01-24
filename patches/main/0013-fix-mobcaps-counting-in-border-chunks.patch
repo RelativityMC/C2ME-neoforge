@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Wed, 1 Jan 2025 12:14:11 +0800
+Subject: [PATCH] fix: mobcaps counting in border chunks
+
+Backported from 28a682c159503b5ad1ed8b4e14bda39d7f6319ce
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinSimulationDistanceLevelPropagator.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinSimulationDistanceLevelPropagator.java
+new file mode 100644
+index 00000000..cb3450e0
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinSimulationDistanceLevelPropagator.java
+@@ -0,0 +1,26 @@
++package com.ishland.c2me.notickvd.mixin;
++
++import net.minecraft.world.SimulationDistanceLevelPropagator;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.Constant;
++import org.spongepowered.asm.mixin.injection.ModifyConstant;
++
++@Mixin(SimulationDistanceLevelPropagator.class)
++public class MixinSimulationDistanceLevelPropagator {
++
++    @ModifyConstant(method = "<init>", constant = {@Constant(intValue = 34), @Constant(intValue = 33)}, require = 2)
++    private static int modifyMax(int constant) {
++        return constant + 1;
++    }
++
++    @ModifyConstant(method = "getLevel(Lnet/minecraft/util/collection/SortedArraySet;)I", constant = @Constant(intValue = 34))
++    private int modifyMax1(int constant) {
++        return constant + 1;
++    }
++
++    @ModifyConstant(method = "setLevel", constant = @Constant(intValue = 33))
++    private int modifyMax2(int constant) {
++        return constant + 1;
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+index c03ffb8f..be745776 100644
+--- a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
++++ b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+@@ -12,6 +12,7 @@
+     "MixinServerAccessibleChunkSending",
+     "MixinServerBlockTicking",
+     "MixinServerChunkManager",
++    "MixinSimulationDistanceLevelPropagator",
+     "MixinThreadedAnvilChunkStorage",
+     "MixinWorld",
+     "MixinWorldChunk",

@@ -1,0 +1,1022 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Fri, 22 Nov 2024 23:33:47 +0800
+Subject: [PATCH] new: scalable no-tick view distance, allowing usable 300+
+ render distances
+
+Backported from 944313690733e282f026551266eb18edfca2ce59
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IChunkTicketManager.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IChunkTicketManager.java
+index fb7f2d04..3e53586f 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IChunkTicketManager.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IChunkTicketManager.java
+@@ -7,6 +7,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
+ import net.minecraft.server.world.ChunkTicket;
+ import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.util.collection.SortedArraySet;
++import net.minecraft.world.SimulationDistanceLevelPropagator;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.gen.Accessor;
+ import org.spongepowered.asm.mixin.gen.Invoker;
+@@ -26,4 +27,7 @@ public interface IChunkTicketManager {
+     @Accessor
+     ChunkTicketManager.NearbyChunkTicketUpdater getNearbyChunkTicketUpdater();
+ 
++    @Accessor
++    SimulationDistanceLevelPropagator getSimulationDistanceTracker();
++
+ }
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/ISimulationDistanceLevelPropagator.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/ISimulationDistanceLevelPropagator.java
+new file mode 100644
+index 00000000..1da26449
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/ISimulationDistanceLevelPropagator.java
+@@ -0,0 +1,14 @@
++package com.ishland.c2me.base.mixin.access;
++
++import it.unimi.dsi.fastutil.longs.Long2ByteMap;
++import net.minecraft.world.SimulationDistanceLevelPropagator;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.gen.Accessor;
++
++@Mixin(SimulationDistanceLevelPropagator.class)
++public interface ISimulationDistanceLevelPropagator {
++
++    @Accessor
++    Long2ByteMap getLevels();
++
++}
+diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
+index 2197c6f2..b94c3ecd 100644
+--- a/c2me-base/src/main/resources/c2me-base.mixins.json
++++ b/c2me-base/src/main/resources/c2me-base.mixins.json
+@@ -36,6 +36,7 @@
+     "access.ISimpleRandom",
+     "access.ISimpleTickScheduler",
+     "access.ISimplexNoiseSampler",
++    "access.ISimulationDistanceLevelPropagator",
+     "access.IState",
+     "access.IStorageIoWorker",
+     "access.IStructurePiece",
+diff --git a/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
+similarity index 100%
+rename from src/main/resources/c2me.mixins.json
+rename to c2me-base/src/main/resources/c2me.mixins.json
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/IChunkTicketManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
+similarity index 61%
+rename from c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/IChunkTicketManager.java
+rename to c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
+index 9452b9ef..4bddda8c 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/IChunkTicketManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
+@@ -2,10 +2,10 @@ package com.ishland.c2me.notickvd.common;
+ 
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ 
+-public interface IChunkTicketManager {
++public interface ChunkTicketManagerExtension {
+ 
+     LongSet getNoTickOnlyChunks();
+ 
+-    int getNoTickPendingTicketUpdates();
++    long getPendingLoadsCount();
+ 
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+index 822c62b5..64796be8 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+@@ -32,20 +32,7 @@ public class Config {
+                     " This will send chunks twice increasing network load")
+             .getBoolean(false, true);
+ 
+-    public static final long maxViewDistance = new ConfigSystem.ConfigAccessor()
+-            .key("noTickViewDistance.maxViewDistance")
+-            .comment("""
+-                    Maximum view distance for no-tick view distance\s
+-                    
+-                    This allows you to specify the maximum view distance that no-tick view distance can support.\s
+-                    The maximum supported is 1073741823 and the minimum that make sense is 32,\s
+-                    This option is purely to save memory, as it needs to reserve memory for the maximum view distance\s
+-                    
+-                    Note: on the client side, `clientSideConfig.modifyMaxVDConfig.maxViewDistance` should also\s
+-                    be increased to actually expose the view distance in video settings\s
+-                    
+-                    """)
+-            .getLong(2048, 2048, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
++    public static final int maxViewDistance = 1 << 16;
+ 
+     public static void init() {
+     }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
+index 02095a81..7c8fc4e0 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
+@@ -1,16 +1,13 @@
+ package com.ishland.c2me.notickvd.common;
+ 
+ import com.ishland.c2me.base.common.GlobalExecutors;
+-import it.unimi.dsi.fastutil.longs.LongIterator;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+-import it.unimi.dsi.fastutil.longs.LongSets;
+-import net.minecraft.server.world.ChunkTicket;
+ import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.util.math.ChunkPos;
+ 
+ import java.util.ArrayList;
++import java.util.LinkedList;
+ import java.util.List;
+ import java.util.concurrent.ConcurrentLinkedQueue;
+ import java.util.concurrent.Executor;
+@@ -18,44 +15,33 @@ import java.util.concurrent.atomic.AtomicBoolean;
+ 
+ public class NoTickSystem {
+ 
+-    private final PlayerNoTickDistanceMap playerNoTickDistanceMap;
+-    private final NormalTicketDistanceMap normalTicketDistanceMap;
+     private final ChunkTicketManager chunkTicketManager;
+ 
++    private final PlayerNoTickLoader playerNoTickLoader;
+     private final ConcurrentLinkedQueue<Runnable> pendingActionsOnScheduler = new ConcurrentLinkedQueue<>();
+     final ConcurrentLinkedQueue<Runnable> mainBeforeTicketTicks = new ConcurrentLinkedQueue<>();
+     final ConcurrentLinkedQueue<Runnable> mainAfterTicketTicks = new ConcurrentLinkedQueue<>();
+ 
+     private final AtomicBoolean isTicking = new AtomicBoolean();
+     final Executor executor = GlobalExecutors.asyncScheduler;
+-    private volatile LongSet noTickOnlyChunksSnapshot = LongSets.EMPTY_SET;
+     private volatile boolean pendingPurge = false;
+     private volatile long age = 0;
+ 
+     public NoTickSystem(ChunkTicketManager chunkTicketManager) {
+         this.chunkTicketManager = chunkTicketManager;
+-        this.playerNoTickDistanceMap = new PlayerNoTickDistanceMap(chunkTicketManager, this);
+-        this.normalTicketDistanceMap = new NormalTicketDistanceMap(chunkTicketManager);
+-    }
+-
+-    public void onTicketAdded(long position, ChunkTicket<?> ticket) {
+-        this.pendingActionsOnScheduler.add(() -> this.normalTicketDistanceMap.addTicket(position, ticket));
+-    }
+-
+-    public void onTicketRemoved(long position, ChunkTicket<?> ticket) {
+-        this.pendingActionsOnScheduler.add(() -> this.normalTicketDistanceMap.removeTicket(position, ticket));
++        this.playerNoTickLoader = new PlayerNoTickLoader(chunkTicketManager, this);
+     }
+ 
+     public void addPlayerSource(ChunkPos chunkPos) {
+-        this.pendingActionsOnScheduler.add(() -> this.playerNoTickDistanceMap.addSource(chunkPos));
++        this.pendingActionsOnScheduler.add(() -> this.playerNoTickLoader.addSource(chunkPos));
+     }
+ 
+     public void removePlayerSource(ChunkPos chunkPos) {
+-        this.pendingActionsOnScheduler.add(() -> this.playerNoTickDistanceMap.removeSource(chunkPos));
++        this.pendingActionsOnScheduler.add(() -> this.playerNoTickLoader.removeSource(chunkPos));
+     }
+ 
+     public void setNoTickViewDistance(int viewDistance) {
+-        this.pendingActionsOnScheduler.add(() -> this.playerNoTickDistanceMap.setViewDistance(viewDistance));
++        this.pendingActionsOnScheduler.add(() -> this.playerNoTickLoader.setViewDistance(viewDistance));
+     }
+ 
+     public void beforeTicketTicks() {
+@@ -80,38 +66,20 @@ public class NoTickSystem {
+                 }
+             }
+             executor.execute(() -> {
+-                for (Runnable task : tasks) {
+-                    try {
+-                        task.run();
+-                    } catch (Throwable t) {
+-                        t.printStackTrace();
++                try {
++                    for (Runnable task : tasks) {
++                        try {
++                            task.run();
++                        } catch (Throwable t) {
++                            t.printStackTrace();
++                        }
+                     }
+-                }
+-
+-                boolean hasNoTickTicketUpdates;
+-                if (pendingPurge) {
+-                    this.normalTicketDistanceMap.purge(this.age);
+-                    hasNoTickTicketUpdates = this.playerNoTickDistanceMap.runPendingTicketUpdates(tacs);
+-                } else {
+-                    hasNoTickTicketUpdates = false;
+-                }
+ 
+-                final boolean hasNormalTicketUpdates = this.normalTicketDistanceMap.update();
+-                final boolean hasNoTickUpdates = this.playerNoTickDistanceMap.update();
+-                if (hasNormalTicketUpdates || hasNoTickUpdates || hasNoTickTicketUpdates) {
+-                    final LongSet noTickChunks = this.playerNoTickDistanceMap.getChunks();
+-                    final LongSet normalChunks = this.normalTicketDistanceMap.getChunks();
+-                    final LongOpenHashSet longs = new LongOpenHashSet(noTickChunks.size() * 3 / 2);
+-                    final LongIterator iterator = noTickChunks.iterator();
+-                    while (iterator.hasNext()) {
+-                        final long chunk = iterator.nextLong();
+-                        if (normalChunks.contains(chunk)) continue;
+-                        longs.add(chunk);
+-                    }
+-                    this.noTickOnlyChunksSnapshot = LongSets.unmodifiable(longs);
++                    this.playerNoTickLoader.tick(tacs);
++                    if (!this.pendingActionsOnScheduler.isEmpty() || !tasks.isEmpty()) scheduleTick(tacs); // run more tasks
++                } finally {
++                    this.isTicking.set(false);
+                 }
+-                this.isTicking.set(false);
+-                if (hasNormalTicketUpdates || hasNoTickUpdates) scheduleTick(tacs); // run more tasks
+             });
+         }
+     }
+@@ -133,10 +101,10 @@ public class NoTickSystem {
+     }
+ 
+     public LongSet getNoTickOnlyChunksSnapshot() {
+-        return this.noTickOnlyChunksSnapshot;
++        return null;
+     }
+ 
+-    public int getPendingNoTickTicketUpdatesCount() {
+-        return this.playerNoTickDistanceMap.getPendingTicketUpdatesCount();
++    public long getPendingLoadsCount() {
++        return this.playerNoTickLoader.getPendingLoadsCount();
+     }
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NormalTicketDistanceMap.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NormalTicketDistanceMap.java
+deleted file mode 100644
+index ca70a71b..00000000
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NormalTicketDistanceMap.java
++++ /dev/null
+@@ -1,104 +0,0 @@
+-package com.ishland.c2me.notickvd.common;
+-
+-import com.ishland.c2me.base.mixin.access.IChunkTicket;
+-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.LongSet;
+-import it.unimi.dsi.fastutil.objects.ObjectIterator;
+-import net.minecraft.server.world.ChunkTicket;
+-import net.minecraft.server.world.ChunkTicketManager;
+-import net.minecraft.util.collection.SortedArraySet;
+-import net.minecraft.world.ChunkPosDistanceLevelPropagator;
+-
+-public class NormalTicketDistanceMap extends ChunkPosDistanceLevelPropagator {
+-    private final ChunkTicketManager chunkTicketManager;
+-    private final Long2IntOpenHashMap distanceMap = new Long2IntOpenHashMap();
+-    private final Long2ObjectOpenHashMap<SortedArraySet<ChunkTicket<?>>> ticketsByPosition = new Long2ObjectOpenHashMap<>();
+-
+-    public NormalTicketDistanceMap(ChunkTicketManager chunkTicketManager) {
+-        super(33 + 2, 16, 256);
+-        this.chunkTicketManager = chunkTicketManager;
+-        distanceMap.defaultReturnValue(33 + 2);
+-    }
+-
+-    @Override
+-    protected int getInitialLevel(long id) {
+-        SortedArraySet<ChunkTicket<?>> sortedArraySet = ticketsByPosition.get(id);
+-        if (sortedArraySet != null) {
+-            if (sortedArraySet.isEmpty()) return Integer.MAX_VALUE;
+-            for (ChunkTicket<?> next : sortedArraySet) {
+-                if (next.getType() == PlayerNoTickDistanceMap.TICKET_TYPE) continue;
+-                return next.getLevel();
+-            }
+-        }
+-        return Integer.MAX_VALUE;
+-    }
+-
+-    @Override
+-    protected int getLevel(long id) {
+-        return distanceMap.get(id);
+-    }
+-
+-    @Override
+-    protected void setLevel(long id, int level) {
+-        if (level > 33) {
+-            distanceMap.remove(id);
+-        } else {
+-            distanceMap.put(id, level);
+-        }
+-    }
+-
+-    private static int getLevel(SortedArraySet<ChunkTicket<?>> sortedArraySet) {
+-        return !sortedArraySet.isEmpty() ? sortedArraySet.first().getLevel() : Integer.MAX_VALUE;
+-    }
+-
+-    public void addTicket(long position, ChunkTicket<?> ticket) {
+-        if (ticket.getType() == PlayerNoTickDistanceMap.TICKET_TYPE) return;
+-        SortedArraySet<ChunkTicket<?>> sortedArraySet = this.getTicketSet(position);
+-        int i = getLevel(sortedArraySet);
+-        sortedArraySet.add(ticket);
+-        if (ticket.getLevel() < i) {
+-            this.updateLevel(position, ticket.getLevel(), true);
+-        }
+-    }
+-
+-    public void removeTicket(long pos, ChunkTicket<?> ticket) {
+-        if (ticket.getType() == PlayerNoTickDistanceMap.TICKET_TYPE) return;
+-        SortedArraySet<ChunkTicket<?>> sortedArraySet = this.getTicketSet(pos);
+-        sortedArraySet.remove(ticket);
+-
+-        if (sortedArraySet.isEmpty()) {
+-            this.ticketsByPosition.remove(pos);
+-        }
+-
+-        this.updateLevel(pos, getLevel(sortedArraySet), false);
+-    }
+-
+-    public void purge(long age) {
+-        final ObjectIterator<Long2ObjectMap.Entry<SortedArraySet<ChunkTicket<?>>>> iterator = this.ticketsByPosition.long2ObjectEntrySet().fastIterator();
+-
+-        while (iterator.hasNext()) {
+-            final Long2ObjectMap.Entry<SortedArraySet<ChunkTicket<?>>> entry = iterator.next();
+-            final boolean isModified = entry.getValue().removeIf(chunkTicket -> ((IChunkTicket) (Object) chunkTicket).invokeIsExpired(age));
+-            if (isModified) {
+-                this.updateLevel(entry.getLongKey(), getLevel(entry.getValue()), false);
+-            }
+-            if (entry.getValue().isEmpty()) {
+-                iterator.remove();
+-            }
+-        }
+-    }
+-
+-    public SortedArraySet<ChunkTicket<?>> getTicketSet(long pos) {
+-        return this.ticketsByPosition.computeIfAbsent(pos, (l) -> SortedArraySet.create(4));
+-    }
+-
+-    public boolean update() {
+-        return Integer.MAX_VALUE - this.applyPendingUpdates(Integer.MAX_VALUE) != 0;
+-    }
+-
+-    public LongSet getChunks() {
+-        return this.distanceMap.keySet();
+-    }
+-}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickDistanceMap.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickDistanceMap.java
+deleted file mode 100644
+index 55a9eb4b..00000000
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickDistanceMap.java
++++ /dev/null
+@@ -1,191 +0,0 @@
+-package com.ishland.c2me.notickvd.common;
+-
+-import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+-import com.ishland.c2me.notickvd.common.modimpl.ChunkPosDistanceLevelPropagatorExtended;
+-import com.ishland.c2me.notickvd.common.modimpl.LevelPropagatorExtended;
+-import com.ishland.flowsched.structs.DynamicPriorityQueue;
+-import com.mojang.logging.LogUtils;
+-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.LongIterator;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+-import it.unimi.dsi.fastutil.longs.LongSet;
+-import it.unimi.dsi.fastutil.objects.ObjectSet;
+-import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+-import net.minecraft.server.network.ServerPlayerEntity;
+-import net.minecraft.server.world.ChunkHolder;
+-import net.minecraft.server.world.ChunkTicketManager;
+-import net.minecraft.server.world.ChunkTicketType;
+-import net.minecraft.server.world.OptionalChunk;
+-import net.minecraft.server.world.ServerChunkLoadingManager;
+-import net.minecraft.util.math.ChunkPos;
+-import net.minecraft.util.math.MathHelper;
+-import net.minecraft.world.chunk.WorldChunk;
+-import org.slf4j.Logger;
+-
+-import java.util.Comparator;
+-import java.util.concurrent.CompletableFuture;
+-
+-public class PlayerNoTickDistanceMap extends ChunkPosDistanceLevelPropagatorExtended {
+-
+-    private static final Logger LOGGER = LogUtils.getLogger();
+-    public static final ChunkTicketType<ChunkPos> TICKET_TYPE = ChunkTicketType.create("c2me_no_tick_vd", Comparator.comparingLong(ChunkPos::toLong));
+-    public static final int MAX_RENDER_DISTANCE = MathHelper.clamp((int) Config.maxViewDistance, 32, LevelPropagatorExtended.MAX_LEVEL - 10);
+-
+-    private final LongSet sourceChunks = new LongOpenHashSet();
+-    private final Long2IntOpenHashMap distanceFromNearestPlayer = new Long2IntOpenHashMap();
+-    private final DynamicPriorityQueue<ChunkPos> pendingTicketAdds = new DynamicPriorityQueue<>(MAX_RENDER_DISTANCE + 2);
+-    private final LongOpenHashSet pendingTicketRemoves = new LongOpenHashSet();
+-    private final LongOpenHashSet managedChunkTickets = new LongOpenHashSet();
+-    private final ReferenceArrayList<CompletableFuture<Void>> chunkLoadFutures = new ReferenceArrayList<>();
+-
+-    private final ChunkTicketManager chunkTicketManager;
+-    private final NoTickSystem noTickSystem;
+-    private volatile int viewDistance;
+-    private volatile int pendingTicketUpdatesCount = 0; // for easier access concurrently
+-
+-    public PlayerNoTickDistanceMap(ChunkTicketManager chunkTicketManager, NoTickSystem noTickSystem) {
+-        super(MAX_RENDER_DISTANCE + 2, 16, 256);
+-        this.chunkTicketManager = chunkTicketManager;
+-        this.noTickSystem = noTickSystem;
+-        this.distanceFromNearestPlayer.defaultReturnValue(MAX_RENDER_DISTANCE + 2);
+-        this.setViewDistance(12);
+-    }
+-
+-    @Override
+-    protected int getInitialLevel(long chunkPos) {
+-        final ObjectSet<ServerPlayerEntity> players = ((com.ishland.c2me.base.mixin.access.IChunkTicketManager) chunkTicketManager).getPlayersByChunkPos().get(chunkPos);
+-        return players != null && !players.isEmpty() ? MAX_RENDER_DISTANCE - viewDistance : Integer.MAX_VALUE;
+-    }
+-
+-    @Override
+-    protected int getLevel(long chunkPos) {
+-        return this.distanceFromNearestPlayer.get(chunkPos);
+-    }
+-
+-    @Override
+-    protected void setLevel(long chunkPos, int level) {
+-        if (level > MAX_RENDER_DISTANCE) {
+-            if (this.distanceFromNearestPlayer.containsKey(chunkPos)) {
+-                this.pendingTicketRemoves.add(chunkPos);
+-                this.pendingTicketAdds.remove(new ChunkPos(chunkPos));
+-                this.distanceFromNearestPlayer.remove(chunkPos);
+-            }
+-        } else {
+-            if (!this.distanceFromNearestPlayer.containsKey(chunkPos)) {
+-                pendingTicketRemoves.remove(chunkPos);
+-                pendingTicketAdds.enqueue(new ChunkPos(chunkPos), level);
+-            }
+-            pendingTicketAdds.changePriority(new ChunkPos(chunkPos), level);
+-            this.distanceFromNearestPlayer.put(chunkPos, level);
+-        }
+-    }
+-
+-    public void addSource(ChunkPos chunkPos) {
+-        this.updateLevel(chunkPos.toLong(), MAX_RENDER_DISTANCE - this.viewDistance, true);
+-        this.sourceChunks.add(chunkPos.toLong());
+-    }
+-
+-    public void removeSource(ChunkPos chunkPos) {
+-        this.updateLevel(chunkPos.toLong(), Integer.MAX_VALUE, false);
+-        this.sourceChunks.remove(chunkPos.toLong());
+-    }
+-
+-    public boolean update() {
+-        final boolean hasUpdates = this.applyPendingUpdates(Integer.MAX_VALUE) != Integer.MAX_VALUE;
+-        this.pendingTicketUpdatesCount = this.pendingTicketAdds.size() + this.pendingTicketRemoves.size();
+-        return hasUpdates;
+-    }
+-
+-    private boolean hasPendingTicketUpdatesAsync = false;
+-
+-    boolean runPendingTicketUpdates(ServerChunkLoadingManager tacs) {
+-        final boolean hasUpdatesNow = runPendingTicketUpdatesInternal(tacs);
+-        final boolean hasUpdatesEarlier = hasPendingTicketUpdatesAsync;
+-        hasPendingTicketUpdatesAsync = false;
+-        return hasUpdatesNow || hasUpdatesEarlier;
+-    }
+-
+-    private boolean runPendingTicketUpdatesInternal(ServerChunkLoadingManager tacs) {
+-        boolean hasUpdates = false;
+-        // remove old tickets
+-        {
+-            final LongIterator it = pendingTicketRemoves.longIterator();
+-            while (it.hasNext()) {
+-                final long chunkPos = it.nextLong();
+-                if (this.managedChunkTickets.remove(chunkPos)) {
+-                    removeTicket0(new ChunkPos(chunkPos));
+-                    hasUpdates = true;
+-                }
+-            }
+-            pendingTicketRemoves.clear();
+-        }
+-
+-        // clean up futures
+-        this.chunkLoadFutures.removeIf(CompletableFuture::isDone);
+-
+-        // add new tickets
+-        while (this.chunkLoadFutures.size() < Config.maxConcurrentChunkLoads) {
+-            final ChunkPos pos = this.pendingTicketAdds.dequeue();
+-            if (pos == null) break;
+-            if (this.managedChunkTickets.add(pos.toLong())) {
+-                final CompletableFuture<Void> ticketFuture = this.addTicket0(pos);
+-                this.chunkLoadFutures.add(getChunkLoadFuture(tacs, pos, ticketFuture));
+-                hasUpdates = true;
+-            }
+-        }
+-
+-        this.pendingTicketUpdatesCount = this.pendingTicketAdds.size() + this.pendingTicketRemoves.size();
+-        return hasUpdates;
+-    }
+-
+-    private void removeTicket0(ChunkPos pos) {
+-        this.noTickSystem.mainBeforeTicketTicks.add(() -> this.chunkTicketManager.removeTicketWithLevel(TICKET_TYPE, pos, 33, pos));
+-    }
+-
+-    private CompletableFuture<Void> addTicket0(ChunkPos pos) {
+-        return CompletableFuture.runAsync(() -> this.chunkTicketManager.addTicketWithLevel(TICKET_TYPE, pos, 33, pos), this.noTickSystem.mainBeforeTicketTicks::add);
+-    }
+-
+-    private CompletableFuture<Void> getChunkLoadFuture(ServerChunkLoadingManager tacs, ChunkPos pos, CompletableFuture<Void> ticketFuture) {
+-        final CompletableFuture<Void> future = ticketFuture.thenComposeAsync(unused -> {
+-            final ChunkHolder holder = ((IThreadedAnvilChunkStorage) tacs).invokeGetChunkHolder(pos.toLong());
+-            if (holder == null) {
+-                return CompletableFuture.completedFuture(null);
+-            } else {
+-                final CompletableFuture<OptionalChunk<WorldChunk>> accessibleFuture = holder.getAccessibleFuture();
+-                accessibleFuture.whenCompleteAsync((worldChunkOptionalChunk, throwable) -> {
+-                    if (throwable != null) {
+-                        LOGGER.error("Failed to load chunk {}", pos);
+-                    }
+-                }, ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor());
+-                return accessibleFuture.exceptionally(throwable -> null).thenAccept(unused1 -> {
+-                });
+-            }
+-        }, this.noTickSystem.mainAfterTicketTicks::add);
+-        future.thenRunAsync(() -> {
+-            this.chunkLoadFutures.remove(future);
+-            final boolean hasUpdates = this.runPendingTicketUpdatesInternal(tacs);
+-            if (hasUpdates) {
+-                hasPendingTicketUpdatesAsync = true;
+-            }
+-        }, this.noTickSystem.executor);
+-        return future;
+-    }
+-
+-    public void setViewDistance(int viewDistance) {
+-        this.viewDistance = MathHelper.clamp(viewDistance, 3, MAX_RENDER_DISTANCE);
+-        sourceChunks.forEach((long value) -> {
+-            removeSource(new ChunkPos(value));
+-            addSource(new ChunkPos(value));
+-        });
+-    }
+-
+-    public int getPendingTicketUpdatesCount() {
+-        return this.pendingTicketUpdatesCount;
+-    }
+-
+-    public LongSet getChunks() {
+-        return managedChunkTickets;
+-    }
+-
+-}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+new file mode 100644
+index 00000000..6eebb93e
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+@@ -0,0 +1,179 @@
++package com.ishland.c2me.notickvd.common;
++
++import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.c2me.notickvd.common.iterators.ChunkIterator;
++import com.ishland.c2me.notickvd.common.iterators.SpiralIterator;
++import com.mojang.logging.LogUtils;
++import it.unimi.dsi.fastutil.longs.Long2ReferenceLinkedOpenHashMap;
++import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
++import it.unimi.dsi.fastutil.longs.LongIterator;
++import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
++import it.unimi.dsi.fastutil.longs.LongSet;
++import it.unimi.dsi.fastutil.objects.ObjectBidirectionalIterator;
++import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
++import net.minecraft.server.world.ChunkHolder;
++import net.minecraft.server.world.ChunkTicketManager;
++import net.minecraft.server.world.ChunkTicketType;
++import net.minecraft.server.world.ServerChunkLoadingManager;
++import net.minecraft.util.Unit;
++import net.minecraft.util.math.ChunkPos;
++import org.slf4j.Logger;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.function.LongFunction;
++
++public class PlayerNoTickLoader {
++
++    private static final Logger LOGGER = LogUtils.getLogger();
++
++    public static final ChunkTicketType<Unit> TICKET_TYPE = ChunkTicketType.create("c2me_no_tick_vd", (a, b) -> 0);
++
++    private final ChunkTicketManager ticketManager;
++    private final NoTickSystem noTickSystem;
++    private final Long2ReferenceLinkedOpenHashMap<ChunkIterator> iterators = new Long2ReferenceLinkedOpenHashMap<>();
++    private final LongSet managedChunks = new LongLinkedOpenHashSet();
++    private final LongFunction<ChunkIterator> createFunction = pos -> new SpiralIterator(ChunkPos.getPackedX(pos), ChunkPos.getPackedZ(pos), this.viewDistance);
++    private final ReferenceArrayList<CompletableFuture<Void>> chunkLoadFutures = new ReferenceArrayList<>();
++
++    private int viewDistance = 12;
++    private boolean dirtyManagedChunks = false;
++    private boolean recreateIterators = false;
++    private volatile long pendingLoadsCountSnapshot = 0L;
++
++    public PlayerNoTickLoader(ChunkTicketManager ticketManager, NoTickSystem noTickSystem) {
++        this.ticketManager = ticketManager;
++        this.noTickSystem = noTickSystem;
++    }
++
++    public void addSource(ChunkPos chunkPos) {
++        this.iterators.computeIfAbsent(chunkPos.toLong(), this.createFunction);
++    }
++
++    public void removeSource(ChunkPos chunkPos) {
++        this.iterators.remove(chunkPos.toLong());
++        this.dirtyManagedChunks = true;
++    }
++
++    public void setViewDistance(int viewDistance) {
++        this.viewDistance = viewDistance;
++        this.dirtyManagedChunks = true;
++        this.recreateIterators = true;
++    }
++
++    public void tick(ServerChunkLoadingManager tacs) {
++        if (this.recreateIterators) {
++            this.dirtyManagedChunks = true;
++            ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iterator = this.iterators.long2ReferenceEntrySet().fastIterator();
++            while (iterator.hasNext()) {
++                Long2ReferenceMap.Entry<ChunkIterator> entry = iterator.next();
++                entry.setValue(this.createFunction.apply(entry.getLongKey()));
++            }
++            this.recreateIterators = false;
++        }
++
++        if (this.dirtyManagedChunks) {
++            LongIterator chunkIterator = this.managedChunks.iterator();
++            ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iteratorIterator = this.iterators.long2ReferenceEntrySet().fastIterator();
++            while (chunkIterator.hasNext()) {
++                long pos = chunkIterator.nextLong();
++                int packedX = ChunkPos.getPackedX(pos);
++                int packedZ = ChunkPos.getPackedZ(pos);
++
++                boolean isUsed = false;
++                if (iteratorIterator.hasNext()) {
++                    while (iteratorIterator.hasNext()) {
++                        Long2ReferenceMap.Entry<ChunkIterator> entry = iteratorIterator.next();
++                        isUsed |= entry.getValue().isInRange(packedX, packedZ);
++                    }
++                } else if (iteratorIterator.hasPrevious()) {
++                    while (iteratorIterator.hasPrevious()) {
++                        Long2ReferenceMap.Entry<ChunkIterator> entry = iteratorIterator.previous();
++                        isUsed |= entry.getValue().isInRange(packedX, packedZ);
++                    }
++                }
++
++                if (!isUsed) {
++                    this.removeTicket0(packedX, packedZ);
++                    chunkIterator.remove();
++                }
++            }
++            this.dirtyManagedChunks = false;
++        }
++
++        this.tickFutures(tacs);
++
++        {
++            long pendingLoadsCount = 0L;
++            ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iterator = this.iterators.long2ReferenceEntrySet().fastIterator();
++            while (iterator.hasNext()) {
++                Long2ReferenceMap.Entry<ChunkIterator> entry = iterator.next();
++                pendingLoadsCount += entry.getValue().remaining();
++            }
++            this.pendingLoadsCountSnapshot = pendingLoadsCount;
++        }
++    }
++
++    void tickFutures(ServerChunkLoadingManager tacs) {
++        this.chunkLoadFutures.removeIf(CompletableFuture::isDone);
++
++        while (this.chunkLoadFutures.size() < Config.maxConcurrentChunkLoads && this.addOneTicket(tacs));
++    }
++
++    private boolean addOneTicket(ServerChunkLoadingManager tacs) {
++        ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iteratorIterator = this.iterators.long2ReferenceEntrySet().fastIterator();
++        while (iteratorIterator.hasNext()) {
++            Long2ReferenceMap.Entry<ChunkIterator> entry = iteratorIterator.next();
++            ChunkIterator iterator = entry.getValue();
++            while (iterator.hasNext()) {
++                ChunkPos pos = iterator.next();
++                if (this.managedChunks.add(pos.toLong())) {
++                    this.chunkLoadFutures.add(loadChunk(tacs, pos.x, pos.z));
++                    this.iterators.getAndMoveToLast(entry.getLongKey());
++                    return true;
++                }
++            }
++        }
++
++        return false;
++    }
++
++    private CompletableFuture<Void> loadChunk(ServerChunkLoadingManager tacs, int x, int z) {
++        CompletableFuture<Void> future = this.addTicket0(x, z)
++                .thenComposeAsync(unused -> {
++                    ChunkHolder holder = ((IThreadedAnvilChunkStorage) tacs).invokeGetChunkHolder(ChunkPos.toLong(x, z));
++                    if (holder == null) {
++                        LOGGER.warn("No holder created after adding ticket to chunk [{}, {}]", x, z);
++                        return CompletableFuture.completedFuture(null);
++                    } else {
++                        return holder.getAccessibleFuture()
++                                .handle((worldChunkOptionalChunk, throwable) -> {
++                                    if (throwable != null) {
++                                        LOGGER.error("Failed to load chunk [{}, {}]", x, z);
++                                    }
++                                    return null;
++                                });
++                    }
++                }, this.noTickSystem.mainAfterTicketTicks::add);
++        future.thenRunAsync(() -> {
++            try {
++                this.chunkLoadFutures.remove(future);
++                this.tickFutures(tacs);
++            } catch (Throwable t) {
++                LOGGER.error("Error while loading chunk [{}, {}]", x, z, t);
++            }
++        }, this.noTickSystem.executor);
++        return future;
++    }
++
++    private CompletableFuture<Void> addTicket0(int x, int z) {
++        return CompletableFuture.runAsync(() -> this.ticketManager.addTicketWithLevel(TICKET_TYPE, new ChunkPos(x, z), 33, Unit.INSTANCE), this.noTickSystem.mainBeforeTicketTicks::add);
++    }
++
++    private void removeTicket0(int x, int z) {
++        this.noTickSystem.mainBeforeTicketTicks.add(() -> this.ticketManager.removeTicketWithLevel(TICKET_TYPE, new ChunkPos(x, z), 33, Unit.INSTANCE));
++    }
++
++    public long getPendingLoadsCount() {
++        return this.pendingLoadsCountSnapshot;
++    }
++}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/ChunkIterator.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/ChunkIterator.java
+new file mode 100644
+index 00000000..c43e7090
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/ChunkIterator.java
+@@ -0,0 +1,27 @@
++package com.ishland.c2me.notickvd.common.iterators;
++
++import net.minecraft.util.math.ChunkPos;
++
++import java.util.Iterator;
++
++public interface ChunkIterator extends Iterator<ChunkPos> {
++
++    long remaining();
++
++    long total();
++
++    int originX();
++
++    int originZ();
++
++    int radius();
++
++    default boolean isInRange(int x, int z) {
++        int originX = this.originX();
++        int originZ = this.originZ();
++        int radius = this.radius();
++        return x >= originX - radius && x <= originX + radius &&
++                z >= originZ - radius && z <= originZ + radius;
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/SpiralIterator.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/SpiralIterator.java
+new file mode 100644
+index 00000000..861b3e79
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/iterators/SpiralIterator.java
+@@ -0,0 +1,91 @@
++package com.ishland.c2me.notickvd.common.iterators;
++
++import net.minecraft.util.math.ChunkPos;
++
++import java.util.Iterator;
++import java.util.NoSuchElementException;
++
++public class SpiralIterator implements ChunkIterator {
++
++    private static final int RIGHT = 0, DOWN = 1, LEFT = 2, UP = 3;
++    private final int originX, originZ;
++    private final int radius;
++    private final long total;
++    private boolean needStep = false;
++    private int x, z;
++    private int spanTotal = 1, spanCount = 0, spanProgress = 0;
++    private int direction = RIGHT;
++    private long currentIndex;
++
++    public SpiralIterator(int originX, int originZ, int radius) {
++        this.originX = originX;
++        this.originZ = originZ;
++        this.radius = radius;
++        this.x = originX;
++        this.z = originZ;
++        this.total = (radius * 2L + 1) * (radius * 2L + 1);
++    }
++
++    @Override
++    public boolean hasNext() {
++        return x != this.originX + this.radius || z != this.originZ + this.radius;
++    }
++
++    @Override
++    public ChunkPos next() {
++        if (!hasNext()) {
++            throw new NoSuchElementException();
++        }
++
++        if (this.needStep) {
++            switch (this.direction) {
++                case RIGHT -> this.x ++;
++                case DOWN -> this.z --;
++                case LEFT -> this.x --;
++                case UP -> this.z ++;
++                default -> throw new AssertionError();
++            }
++            this.spanProgress ++;
++            if (this.spanProgress == this.spanTotal) {
++                this.spanProgress = 0;
++                this.spanCount ++;
++                if (this.spanCount >= 2) {
++                    this.spanTotal ++;
++                    this.spanCount = 0;
++                }
++                this.direction ++;
++                this.direction %= 4;
++            }
++        }
++        this.needStep = true;
++
++        this.currentIndex ++;
++
++        return new ChunkPos(this.x, this.z);
++    }
++
++    @Override
++    public long remaining() {
++        return this.total - this.currentIndex;
++    }
++
++    @Override
++    public long total() {
++        return this.total;
++    }
++
++    @Override
++    public int originX() {
++        return this.originX;
++    }
++
++    @Override
++    public int originZ() {
++        return this.originZ;
++    }
++
++    @Override
++    public int radius() {
++        return this.radius;
++    }
++}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+index c96c3f70..59706a3e 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+@@ -1,11 +1,9 @@
+ package com.ishland.c2me.notickvd.mixin;
+ 
+-import com.ishland.c2me.notickvd.common.IChunkTicketManager;
+-import com.ishland.c2me.notickvd.common.NoOPTickingMap;
++import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
+ import com.ishland.c2me.notickvd.common.NoTickSystem;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import net.minecraft.server.network.ServerPlayerEntity;
+-import net.minecraft.server.world.ChunkTicket;
+ import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.util.math.ChunkSectionPos;
+@@ -22,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+ 
+ @Mixin(ChunkTicketManager.class)
+-public class MixinChunkTicketManager implements IChunkTicketManager {
++public class MixinChunkTicketManager implements ChunkTicketManagerExtension {
+ 
+     @Shadow private long age;
+     @Mutable
+@@ -66,18 +64,6 @@ public class MixinChunkTicketManager implements IChunkTicketManager {
+         this.noTickSystem.tick(chunkStorage);
+     }
+ 
+-    @Inject(method = "addTicket(JLnet/minecraft/server/world/ChunkTicket;)V", at = @At("RETURN"))
+-    private void onAddTicket(long position, ChunkTicket<?> ticket, CallbackInfo ci) {
+-//        if (ticket.getType() != ChunkTicketType.UNKNOWN) System.err.printf("Added ticket (%s) at %s\n", ticket, new ChunkPos(position));
+-        this.noTickSystem.onTicketAdded(position, ticket);
+-    }
+-
+-    @Inject(method = "removeTicket(JLnet/minecraft/server/world/ChunkTicket;)V", at = @At("RETURN"))
+-    private void onRemoveTicket(long pos, ChunkTicket<?> ticket, CallbackInfo ci) {
+-//        if (ticket.getType() != ChunkTicketType.UNKNOWN) System.err.printf("Removed ticket (%s) at %s\n", ticket, new ChunkPos(pos));
+-        this.noTickSystem.onTicketRemoved(pos, ticket);
+-    }
+-
+     /**
+      * @author ishland
+      * @reason remap setSimulationDistance to the normal one
+@@ -104,7 +90,7 @@ public class MixinChunkTicketManager implements IChunkTicketManager {
+ 
+     @Override
+     @Unique
+-    public int getNoTickPendingTicketUpdates() {
+-        return this.noTickSystem.getPendingNoTickTicketUpdatesCount();
++    public long getPendingLoadsCount() {
++        return this.noTickSystem.getPendingLoadsCount();
+     }
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerChunkManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerChunkManager.java
+index cdff764b..c9a2e554 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerChunkManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerChunkManager.java
+@@ -2,10 +2,11 @@ package com.ishland.c2me.notickvd.mixin;
+ 
+ import com.ishland.c2me.base.common.theinterface.IFastChunkHolder;
+ import com.ishland.c2me.base.common.util.FilteringIterable;
+-import com.ishland.c2me.notickvd.common.IChunkTicketManager;
++import com.ishland.c2me.base.mixin.access.IChunkTicketManager;
++import com.ishland.c2me.base.mixin.access.ISimulationDistanceLevelPropagator;
+ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+-import it.unimi.dsi.fastutil.longs.LongSet;
++import it.unimi.dsi.fastutil.longs.Long2ByteMap;
+ import net.minecraft.entity.Entity;
+ import net.minecraft.server.world.ChunkHolder;
+ import net.minecraft.server.world.ChunkTicketManager;
+@@ -34,9 +35,8 @@ public class MixinServerChunkManager {
+ 
+     @WrapOperation(method = "tickChunks", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ServerWorld;iterateEntities()Ljava/lang/Iterable;"))
+     private Iterable<Entity> redirectIterateEntities(ServerWorld serverWorld, Operation<Iterable<Entity>> op) {
+-        final LongSet noTickOnlyChunks = ((IChunkTicketManager) this.ticketManager).getNoTickOnlyChunks();
+-        if (noTickOnlyChunks == null) return op.call(serverWorld);
+-        return new FilteringIterable<>(op.call(serverWorld), entity -> !noTickOnlyChunks.contains(entity.getChunkPos().toLong()));
++        Long2ByteMap trackedChunks = ((ISimulationDistanceLevelPropagator) ((IChunkTicketManager) this.ticketManager).getSimulationDistanceTracker()).getLevels();
++        return new FilteringIterable<>(op.call(serverWorld), entity -> trackedChunks.containsKey(entity.getChunkPos().toLong()));
+     }
+ 
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
+index f8019b0b..32021941 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
+@@ -2,8 +2,7 @@ package com.ishland.c2me.notickvd.mixin;
+ 
+ import com.ishland.c2me.base.mixin.access.IServerChunkManager;
+ import com.ishland.c2me.notickvd.common.Config;
+-import com.ishland.c2me.notickvd.common.IChunkTicketManager;
+-import com.ishland.c2me.notickvd.common.PlayerNoTickDistanceMap;
++import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
+ import com.llamalad7.mixinextras.injector.WrapWithCondition;
+ import net.minecraft.server.network.ServerPlayerEntity;
+ import net.minecraft.server.world.ChunkHolder;
+@@ -41,7 +40,7 @@ public abstract class MixinThreadedAnvilChunkStorage {
+ 
+     @ModifyArg(method = "setViewDistance", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;clamp(III)I"), index = 2)
+     private int modifyMaxVD(int max) {
+-        return PlayerNoTickDistanceMap.MAX_RENDER_DISTANCE;
++        return Config.maxViewDistance;
+     }
+ 
+     @Redirect(method = "getPostProcessedChunk", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkHolder;getPostProcessedChunk()Lnet/minecraft/world/chunk/WorldChunk;"))
+@@ -90,8 +89,8 @@ public abstract class MixinThreadedAnvilChunkStorage {
+         if (chunk instanceof WorldChunk worldChunk) {
+             final ServerWorld serverWorld = (ServerWorld) worldChunk.getWorld();
+             final IServerChunkManager serverChunkManager = (IServerChunkManager) serverWorld.getChunkManager();
+-            final IChunkTicketManager ticketManager =
+-                    (IChunkTicketManager) serverChunkManager.getTicketManager();
++            final ChunkTicketManagerExtension ticketManager =
++                    (ChunkTicketManagerExtension) serverChunkManager.getTicketManager();
+             cir.setReturnValue(cir.getReturnValueZ() && !ticketManager.getNoTickOnlyChunks().contains(chunk.getPos().toLong()));
+         }
+     }
+diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+index 2aa5b849..2f9d3cc3 100644
+--- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
++++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+@@ -1,7 +1,7 @@
+ package com.ishland.c2me.server.utils.common;
+ 
+ import com.ishland.c2me.base.mixin.access.IServerChunkManager;
+-import com.ishland.c2me.notickvd.common.IChunkTicketManager;
++import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
+ import com.mojang.brigadier.CommandDispatcher;
+ import com.mojang.brigadier.context.CommandContext;
+ import net.minecraft.server.command.CommandManager;
+@@ -36,10 +36,8 @@ public class C2MECommands {
+     private static int noTickCommand(CommandContext<ServerCommandSource> ctx) {
+         final ServerChunkManager chunkManager = ctx.getSource().getWorld().toServerWorld().getChunkManager();
+         final ChunkTicketManager ticketManager = ((IServerChunkManager) chunkManager).getTicketManager();
+-        final int noTickOnlyChunks = ((IChunkTicketManager) ticketManager).getNoTickOnlyChunks().size();
+-        final int noTickPendingTicketUpdates = ((IChunkTicketManager) ticketManager).getNoTickPendingTicketUpdates();
+-        ctx.getSource().sendFeedback(() -> Text.of(String.format("No-tick chunks: %d", noTickOnlyChunks)), true);
+-        ctx.getSource().sendFeedback(() -> Text.of(String.format("No-tick chunk pending ticket updates: %d", noTickPendingTicketUpdates)), true);
++        final long noTickPendingTicketUpdates = ((ChunkTicketManagerExtension) ticketManager).getPendingLoadsCount();
++        ctx.getSource().sendFeedback(() -> Text.of(String.format("No-tick chunk pending chunk loads: %d", noTickPendingTicketUpdates)), true);
+ 
+         return 0;
+     }
+@@ -48,7 +46,7 @@ public class C2MECommands {
+ //        final ServerWorld serverWorld = ctx.getSource().getWorld().toServerWorld();
+ //        final ServerChunkManager chunkManager = serverWorld.getChunkManager();
+ //        final ChunkTicketManager ticketManager = ((IServerChunkManager) chunkManager).getTicketManager();
+-//        final LongSet noTickOnlyChunks = ((IChunkTicketManager) ticketManager).getNoTickOnlyChunks();
++//        final LongSet noTickOnlyChunks = ((ChunkTicketManagerExtension) ticketManager).getNoTickOnlyChunks();
+ //        final Iterable<Entity> iterable;
+ //        if (noTickOnlyChunks == null) {
+ //            iterable = serverWorld.iterateEntities();

@@ -1,0 +1,854 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Thu, 5 Dec 2024 23:34:28 +0800
+Subject: [PATCH] fix: notickvd lighting desync
+
+Backported from a4e7f29911605dc3de8bd40427f664a0001c7be9
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IThreadedAnvilChunkStorageTicketManager.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IThreadedAnvilChunkStorageTicketManager.java
+new file mode 100644
+index 00000000..af1e4d14
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/IThreadedAnvilChunkStorageTicketManager.java
+@@ -0,0 +1,13 @@
++package com.ishland.c2me.base.mixin.access;
++
++import net.minecraft.server.world.ServerChunkLoadingManager;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.gen.Accessor;
++
++@Mixin(ServerChunkLoadingManager.TicketManager.class)
++public interface IThreadedAnvilChunkStorageTicketManager {
++
++    @Accessor("field_17443")
++    ServerChunkLoadingManager c2me$getSuperClass();
++
++}
+diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
+index b94c3ecd..2f5d0395 100644
+--- a/c2me-base/src/main/resources/c2me-base.mixins.json
++++ b/c2me-base/src/main/resources/c2me-base.mixins.json
+@@ -45,6 +45,7 @@
+     "access.ISyncedClientOptions",
+     "access.ITACSTicketManager",
+     "access.IThreadedAnvilChunkStorage",
++    "access.IThreadedAnvilChunkStorageTicketManager",
+     "access.IUpgradeData",
+     "access.IVersionedChunkStorage",
+     "access.IWeightedList",
+diff --git a/c2me-notickvd/build.gradle b/c2me-notickvd/build.gradle
+index cf7e746b..2fda1926 100644
+--- a/c2me-notickvd/build.gradle
++++ b/c2me-notickvd/build.gradle
+@@ -1,5 +1,6 @@
+ moduleDependencies(project, [
+         "c2me-base",
++        "c2me-rewrites-chunk-system",
+ ])
+ 
+ jar {
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
+index 4bddda8c..18387ee8 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ChunkTicketManagerExtension.java
+@@ -1,11 +1,9 @@
+ package com.ishland.c2me.notickvd.common;
+ 
+-import it.unimi.dsi.fastutil.longs.LongSet;
+-
+ public interface ChunkTicketManagerExtension {
+ 
+-    LongSet getNoTickOnlyChunks();
++    long c2me$getPendingLoadsCount();
+ 
+-    long getPendingLoadsCount();
++    void c2me$closeNoTickVD();
+ 
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
+index 7c8fc4e0..db576cc6 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickSystem.java
+@@ -2,12 +2,10 @@ package com.ishland.c2me.notickvd.common;
+ 
+ import com.ishland.c2me.base.common.GlobalExecutors;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+-import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.util.math.ChunkPos;
+ 
+ import java.util.ArrayList;
+-import java.util.LinkedList;
+ import java.util.List;
+ import java.util.concurrent.ConcurrentLinkedQueue;
+ import java.util.concurrent.Executor;
+@@ -15,8 +13,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
+ 
+ public class NoTickSystem {
+ 
+-    private final ChunkTicketManager chunkTicketManager;
+-
+     private final PlayerNoTickLoader playerNoTickLoader;
+     private final ConcurrentLinkedQueue<Runnable> pendingActionsOnScheduler = new ConcurrentLinkedQueue<>();
+     final ConcurrentLinkedQueue<Runnable> mainBeforeTicketTicks = new ConcurrentLinkedQueue<>();
+@@ -27,9 +23,8 @@ public class NoTickSystem {
+     private volatile boolean pendingPurge = false;
+     private volatile long age = 0;
+ 
+-    public NoTickSystem(ChunkTicketManager chunkTicketManager) {
+-        this.chunkTicketManager = chunkTicketManager;
+-        this.playerNoTickLoader = new PlayerNoTickLoader(chunkTicketManager, this);
++    public NoTickSystem(ServerChunkLoadingManager tacs) {
++        this.playerNoTickLoader = new PlayerNoTickLoader(tacs, this);
+     }
+ 
+     public void addPlayerSource(ChunkPos chunkPos) {
+@@ -52,11 +47,11 @@ public class NoTickSystem {
+         drainQueue(this.mainAfterTicketTicks);
+     }
+ 
+-    public void tick(ServerChunkLoadingManager tacs) {
+-        scheduleTick(tacs);
++    public void tick() {
++        scheduleTick();
+     }
+ 
+-    private void scheduleTick(ServerChunkLoadingManager tacs) {
++    private void scheduleTick() {
+         if (!this.pendingActionsOnScheduler.isEmpty() && this.isTicking.compareAndSet(false, true)) {
+             List<Runnable> tasks = new ArrayList<>(this.pendingActionsOnScheduler.size() + 3);
+             {
+@@ -75,8 +70,8 @@ public class NoTickSystem {
+                         }
+                     }
+ 
+-                    this.playerNoTickLoader.tick(tacs);
+-                    if (!this.pendingActionsOnScheduler.isEmpty() || !tasks.isEmpty()) scheduleTick(tacs); // run more tasks
++                    this.playerNoTickLoader.tick();
++                    if (!this.pendingActionsOnScheduler.isEmpty() || !tasks.isEmpty()) scheduleTick(); // run more tasks
+                 } finally {
+                     this.isTicking.set(false);
+                 }
+@@ -100,11 +95,18 @@ public class NoTickSystem {
+         this.pendingPurge = true;
+     }
+ 
+-    public LongSet getNoTickOnlyChunksSnapshot() {
+-        return null;
+-    }
+-
+     public long getPendingLoadsCount() {
+         return this.playerNoTickLoader.getPendingLoadsCount();
+     }
++
++    public void close() {
++        this.playerNoTickLoader.close();
++        executor.execute(() -> {
++            try {
++                this.playerNoTickLoader.tick();
++            } catch (Throwable t) {
++                t.printStackTrace();
++            }
++        });
++    }
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+index 6eebb93e..319e00c9 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/PlayerNoTickLoader.java
+@@ -1,8 +1,15 @@
+ package com.ishland.c2me.notickvd.common;
+ 
+-import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.notickvd.common.iterators.ChunkIterator;
+ import com.ishland.c2me.notickvd.common.iterators.SpiralIterator;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.c2me.rewrites.chunksystem.common.ducks.IChunkSystemAccess;
++import com.ishland.flowsched.scheduler.ItemHolder;
++import com.ishland.flowsched.scheduler.ItemTicket;
++import com.ishland.flowsched.scheduler.StatusAdvancingScheduler;
+ import com.mojang.logging.LogUtils;
+ import it.unimi.dsi.fastutil.longs.Long2ReferenceLinkedOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+@@ -11,37 +18,35 @@ import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.objects.ObjectBidirectionalIterator;
+ import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+-import net.minecraft.server.world.ChunkHolder;
+-import net.minecraft.server.world.ChunkTicketManager;
+-import net.minecraft.server.world.ChunkTicketType;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+-import net.minecraft.util.Unit;
+ import net.minecraft.util.math.ChunkPos;
+ import org.slf4j.Logger;
+ 
+ import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.function.LongFunction;
+ 
+ public class PlayerNoTickLoader {
+ 
+     private static final Logger LOGGER = LogUtils.getLogger();
+ 
+-    public static final ChunkTicketType<Unit> TICKET_TYPE = ChunkTicketType.create("c2me_no_tick_vd", (a, b) -> 0);
++    public static final ItemTicket.TicketType TICKET_TYPE = new ItemTicket.TicketType("c2me:notickvd");
+ 
+-    private final ChunkTicketManager ticketManager;
++    private final ServerChunkLoadingManager tacs;
+     private final NoTickSystem noTickSystem;
+     private final Long2ReferenceLinkedOpenHashMap<ChunkIterator> iterators = new Long2ReferenceLinkedOpenHashMap<>();
+     private final LongSet managedChunks = new LongLinkedOpenHashSet();
+     private final LongFunction<ChunkIterator> createFunction = pos -> new SpiralIterator(ChunkPos.getPackedX(pos), ChunkPos.getPackedZ(pos), this.viewDistance);
+     private final ReferenceArrayList<CompletableFuture<Void>> chunkLoadFutures = new ReferenceArrayList<>();
++    private final AtomicBoolean closing = new AtomicBoolean(false);
+ 
+     private int viewDistance = 12;
+     private boolean dirtyManagedChunks = false;
+     private boolean recreateIterators = false;
+     private volatile long pendingLoadsCountSnapshot = 0L;
+ 
+-    public PlayerNoTickLoader(ChunkTicketManager ticketManager, NoTickSystem noTickSystem) {
+-        this.ticketManager = ticketManager;
++    public PlayerNoTickLoader(ServerChunkLoadingManager tacs, NoTickSystem noTickSystem) {
++        this.tacs = tacs;
+         this.noTickSystem = noTickSystem;
+     }
+ 
+@@ -60,7 +65,12 @@ public class PlayerNoTickLoader {
+         this.recreateIterators = true;
+     }
+ 
+-    public void tick(ServerChunkLoadingManager tacs) {
++    public void tick() {
++        if (this.closing.get()) {
++            clearTickets();
++            return;
++        }
++
+         if (this.recreateIterators) {
+             this.dirtyManagedChunks = true;
+             ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iterator = this.iterators.long2ReferenceEntrySet().fastIterator();
+@@ -100,7 +110,7 @@ public class PlayerNoTickLoader {
+             this.dirtyManagedChunks = false;
+         }
+ 
+-        this.tickFutures(tacs);
++        this.tickFutures();
+ 
+         {
+             long pendingLoadsCount = 0L;
+@@ -113,13 +123,25 @@ public class PlayerNoTickLoader {
+         }
+     }
+ 
+-    void tickFutures(ServerChunkLoadingManager tacs) {
++    private void clearTickets() {
++        LongIterator iterator = this.managedChunks.iterator();
++        while (iterator.hasNext()) {
++            long pos = iterator.nextLong();
++
++            this.removeTicket0(ChunkPos.getPackedX(pos), ChunkPos.getPackedZ(pos));
++
++            iterator.remove();
++        }
++    }
++
++    void tickFutures() {
+         this.chunkLoadFutures.removeIf(CompletableFuture::isDone);
+ 
+-        while (this.chunkLoadFutures.size() < Config.maxConcurrentChunkLoads && this.addOneTicket(tacs));
++        if (this.closing.get()) return;
++        while (this.chunkLoadFutures.size() < Config.maxConcurrentChunkLoads && this.addOneTicket());
+     }
+ 
+-    private boolean addOneTicket(ServerChunkLoadingManager tacs) {
++    private boolean addOneTicket() {
+         ObjectBidirectionalIterator<Long2ReferenceMap.Entry<ChunkIterator>> iteratorIterator = this.iterators.long2ReferenceEntrySet().fastIterator();
+         while (iteratorIterator.hasNext()) {
+             Long2ReferenceMap.Entry<ChunkIterator> entry = iteratorIterator.next();
+@@ -127,7 +149,7 @@ public class PlayerNoTickLoader {
+             while (iterator.hasNext()) {
+                 ChunkPos pos = iterator.next();
+                 if (this.managedChunks.add(pos.toLong())) {
+-                    this.chunkLoadFutures.add(loadChunk(tacs, pos.x, pos.z));
++                    this.chunkLoadFutures.add(loadChunk(pos.x, pos.z));
+                     this.iterators.getAndMoveToLast(entry.getLongKey());
+                     return true;
+                 }
+@@ -137,27 +159,12 @@ public class PlayerNoTickLoader {
+         return false;
+     }
+ 
+-    private CompletableFuture<Void> loadChunk(ServerChunkLoadingManager tacs, int x, int z) {
+-        CompletableFuture<Void> future = this.addTicket0(x, z)
+-                .thenComposeAsync(unused -> {
+-                    ChunkHolder holder = ((IThreadedAnvilChunkStorage) tacs).invokeGetChunkHolder(ChunkPos.toLong(x, z));
+-                    if (holder == null) {
+-                        LOGGER.warn("No holder created after adding ticket to chunk [{}, {}]", x, z);
+-                        return CompletableFuture.completedFuture(null);
+-                    } else {
+-                        return holder.getAccessibleFuture()
+-                                .handle((worldChunkOptionalChunk, throwable) -> {
+-                                    if (throwable != null) {
+-                                        LOGGER.error("Failed to load chunk [{}, {}]", x, z);
+-                                    }
+-                                    return null;
+-                                });
+-                    }
+-                }, this.noTickSystem.mainAfterTicketTicks::add);
++    private CompletableFuture<Void> loadChunk(int x, int z) {
++        CompletableFuture<Void> future = this.loadChunk0(x, z);
+         future.thenRunAsync(() -> {
+             try {
+                 this.chunkLoadFutures.remove(future);
+-                this.tickFutures(tacs);
++                this.tickFutures();
+             } catch (Throwable t) {
+                 LOGGER.error("Error while loading chunk [{}, {}]", x, z, t);
+             }
+@@ -165,15 +172,33 @@ public class PlayerNoTickLoader {
+         return future;
+     }
+ 
+-    private CompletableFuture<Void> addTicket0(int x, int z) {
+-        return CompletableFuture.runAsync(() -> this.ticketManager.addTicketWithLevel(TICKET_TYPE, new ChunkPos(x, z), 33, Unit.INSTANCE), this.noTickSystem.mainBeforeTicketTicks::add);
++    private CompletableFuture<Void> loadChunk0(int x, int z) {
++        ChunkPos pos = new ChunkPos(x, z);
++        ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = ((IChunkSystemAccess) this.tacs).c2me$getTheChunkSystem().addTicket(
++                pos,
++                TICKET_TYPE,
++                pos,
++                NewChunkStatus.SERVER_ACCESSIBLE_CHUNK_SENDING,
++                StatusAdvancingScheduler.NO_OP
++        );
++        return holder.getFutureForStatus(NewChunkStatus.SERVER_ACCESSIBLE);
+     }
+ 
+     private void removeTicket0(int x, int z) {
+-        this.noTickSystem.mainBeforeTicketTicks.add(() -> this.ticketManager.removeTicketWithLevel(TICKET_TYPE, new ChunkPos(x, z), 33, Unit.INSTANCE));
++        ChunkPos pos = new ChunkPos(x, z);
++        ((IChunkSystemAccess) this.tacs).c2me$getTheChunkSystem().removeTicket(
++                pos,
++                TICKET_TYPE,
++                pos,
++                NewChunkStatus.SERVER_ACCESSIBLE_CHUNK_SENDING
++        );
+     }
+ 
+     public long getPendingLoadsCount() {
+         return this.pendingLoadsCountSnapshot;
+     }
++
++    public void close() {
++        this.closing.set(true);
++    }
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkGenerationSteps.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkGenerationSteps.java
+deleted file mode 100644
+index 139e5d5f..00000000
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkGenerationSteps.java
++++ /dev/null
+@@ -1,18 +0,0 @@
+-package com.ishland.c2me.notickvd.mixin;
+-
+-import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+-import net.minecraft.world.chunk.ChunkGenerationStep;
+-import net.minecraft.world.chunk.ChunkGenerationSteps;
+-import net.minecraft.world.chunk.ChunkStatus;
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.injection.At;
+-
+-@Mixin(ChunkGenerationSteps.class)
+-public class MixinChunkGenerationSteps {
+-
+-    @ModifyReturnValue(method = {"method_60531", "method_60519"}, at = @At("RETURN"), require = 2)
+-    private static ChunkGenerationStep.Builder requireNeighborsLit(ChunkGenerationStep.Builder original) {
+-        return original.dependsOn(ChunkStatus.LIGHT, 1);
+-    }
+-
+-}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+index 59706a3e..1d683e6d 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+@@ -1,8 +1,8 @@
+ package com.ishland.c2me.notickvd.mixin;
+ 
++import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorageTicketManager;
+ import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
+ import com.ishland.c2me.notickvd.common.NoTickSystem;
+-import it.unimi.dsi.fastutil.longs.LongSet;
+ import net.minecraft.server.network.ServerPlayerEntity;
+ import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+@@ -35,7 +35,7 @@ public class MixinChunkTicketManager implements ChunkTicketManagerExtension {
+ 
+     @Inject(method = "<init>", at = @At("RETURN"))
+     private void onInit(CallbackInfo ci) {
+-        this.noTickSystem = new NoTickSystem((ChunkTicketManager) (Object) this);
++        this.noTickSystem = new NoTickSystem(((IThreadedAnvilChunkStorageTicketManager) this).c2me$getSuperClass());
+     }
+ 
+     @Inject(method = "handleChunkEnter", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkTicketManager$DistanceFromNearestPlayerTracker;updateLevel(JIZ)V", ordinal = 0, shift = At.Shift.AFTER))
+@@ -61,7 +61,7 @@ public class MixinChunkTicketManager implements ChunkTicketManagerExtension {
+     @Inject(method = "update", at = @At("RETURN"))
+     private void onTick(ServerChunkLoadingManager chunkStorage, CallbackInfoReturnable<Boolean> cir) {
+         this.noTickSystem.afterTicketTicks();
+-        this.noTickSystem.tick(chunkStorage);
++        this.noTickSystem.tick();
+     }
+ 
+     /**
+@@ -84,13 +84,12 @@ public class MixinChunkTicketManager implements ChunkTicketManagerExtension {
+ 
+     @Override
+     @Unique
+-    public LongSet getNoTickOnlyChunks() {
+-        return this.noTickSystem.getNoTickOnlyChunksSnapshot();
++    public long c2me$getPendingLoadsCount() {
++        return this.noTickSystem.getPendingLoadsCount();
+     }
+ 
+     @Override
+-    @Unique
+-    public long getPendingLoadsCount() {
+-        return this.noTickSystem.getPendingLoadsCount();
++    public void c2me$closeNoTickVD() {
++        this.noTickSystem.close();
+     }
+ }
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinMinecraftServer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinMinecraftServer.java
+new file mode 100644
+index 00000000..7fe56bb4
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinMinecraftServer.java
+@@ -0,0 +1,25 @@
++package com.ishland.c2me.notickvd.mixin;
++
++import com.ishland.c2me.base.mixin.access.IServerChunkManager;
++import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.world.ServerWorld;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Shadow;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++
++@Mixin(MinecraftServer.class)
++public abstract class MixinMinecraftServer {
++
++    @Shadow public abstract Iterable<ServerWorld> getWorlds();
++
++    @Inject(method = "shutdown", at = @At(value = "INVOKE_STRING", target = "Lorg/slf4j/Logger;info(Ljava/lang/String;)V", args = "ldc=Saving worlds"))
++    private void stopNoTickVD(CallbackInfo ci) {
++        for (ServerWorld world : this.getWorlds()) {
++            ((ChunkTicketManagerExtension) ((IServerChunkManager) world.getChunkManager()).getTicketManager()).c2me$closeNoTickVD();
++        }
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessible.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessible.java
+deleted file mode 100644
+index aae07fe4..00000000
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessible.java
++++ /dev/null
+@@ -1,40 +0,0 @@
+-package com.ishland.c2me.notickvd.mixin;
+-
+-import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+-import com.ishland.c2me.notickvd.common.Config;
+-import com.ishland.flowsched.scheduler.ItemHolder;
+-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+-import net.minecraft.server.world.ServerChunkLoadingManager;
+-import net.minecraft.util.math.ChunkPos;
+-import org.spongepowered.asm.mixin.Dynamic;
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.Overwrite;
+-import org.spongepowered.asm.mixin.Pseudo;
+-import org.spongepowered.asm.mixin.Unique;
+-import org.spongepowered.asm.mixin.injection.At;
+-
+-@Pseudo
+-@Mixin(targets = "com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerAccessible")
+-public class MixinServerAccessible {
+-
+-    /**
+-     * @author ishland
+-     * @reason send chunks
+-     */
+-    @Overwrite(remap = false)
+-    private static boolean needSendChunks() {
+-        return true;
+-    }
+-
+-    @Dynamic
+-    @WrapOperation(method = "lambda$upgradeToThis$0", at = @At(value = "INVOKE", target = "Lcom/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible;sendChunkToPlayer(Lnet/minecraft/server/world/ServerChunkLoadingManager;Lcom/ishland/flowsched/scheduler/ItemHolder;)V", remap = true), remap = false)
+-    private static void wrapSendChunks(ServerChunkLoadingManager tacs, ItemHolder<?, ?, ?, ?> holder, Operation<Void> original) {
+-        if (Config.compatibilityMode) {
+-            ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor().submit(() -> original.call(tacs, holder));
+-        } else {
+-            original.call(tacs, holder);
+-        }
+-    }
+-
+-}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessibleChunkSending.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessibleChunkSending.java
+new file mode 100644
+index 00000000..4bb24b66
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerAccessibleChunkSending.java
+@@ -0,0 +1,75 @@
++package com.ishland.c2me.notickvd.mixin;
++
++import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerAccessibleChunkSending;
++import com.ishland.flowsched.scheduler.Cancellable;
++import com.ishland.flowsched.scheduler.ItemHolder;
++import com.ishland.flowsched.scheduler.KeyStatusPair;
++import net.minecraft.server.world.ServerChunkLoadingManager;
++import net.minecraft.util.math.ChunkPos;
++import net.minecraft.world.chunk.Chunk;
++import net.minecraft.world.chunk.ChunkStatus;
++import net.minecraft.world.chunk.WorldChunk;
++import org.spongepowered.asm.mixin.Final;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Mutable;
++import org.spongepowered.asm.mixin.Overwrite;
++import org.spongepowered.asm.mixin.Shadow;
++import org.spongepowered.asm.mixin.Unique;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CompletionStage;
++
++@Mixin(ServerAccessibleChunkSending.class)
++public class MixinServerAccessibleChunkSending {
++
++    @Mutable
++    @Shadow(remap = false)
++    @Final
++    private static KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] deps;
++
++    @Inject(method = "<clinit>", at = @At("RETURN"))
++    private static void onCLInit(CallbackInfo ci) {
++        NewChunkStatus depStatus = NewChunkStatus.fromVanillaStatus(ChunkStatus.LIGHT);
++        deps = new KeyStatusPair[]{
++                new KeyStatusPair<>(new ChunkPos(-1, -1), depStatus),
++                new KeyStatusPair<>(new ChunkPos(-1, 0), depStatus),
++                new KeyStatusPair<>(new ChunkPos(-1, 1), depStatus),
++                new KeyStatusPair<>(new ChunkPos(0, -1), depStatus),
++                new KeyStatusPair<>(new ChunkPos(0, 1), depStatus),
++                new KeyStatusPair<>(new ChunkPos(1, -1), depStatus),
++                new KeyStatusPair<>(new ChunkPos(1, 0), depStatus),
++                new KeyStatusPair<>(new ChunkPos(1, 1), depStatus),
++        };
++    }
++
++    /**
++     * @author ishland
++     * @reason do chunk sending
++     */
++    @Overwrite(remap = false)
++    public CompletionStage<Void> upgradeToThis(ChunkLoadingContext context, Cancellable cancellable) {
++        return CompletableFuture.runAsync(() -> sendChunkToPlayer(context.tacs(), context.holder()), ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
++    }
++
++    @Unique
++    private static void sendChunkToPlayer(ServerChunkLoadingManager tacs, ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder) {
++        final Chunk chunk = holder.getItem().get().chunk();
++        if (chunk instanceof WorldChunk worldChunk) {
++            CompletableFuture<?> completableFuturexx = holder.getUserData().get().getPostProcessingFuture();
++            if (completableFuturexx.isDone()) {
++                ((IThreadedAnvilChunkStorage) tacs).invokeSendToPlayers(worldChunk);
++            } else {
++                completableFuturexx.thenAcceptAsync(v -> ((IThreadedAnvilChunkStorage) tacs).invokeSendToPlayers(worldChunk), ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor());
++            }
++        }
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerBlockTicking.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerBlockTicking.java
+index f2e21e2f..c0533c52 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerBlockTicking.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinServerBlockTicking.java
+@@ -1,7 +1,7 @@
+ package com.ishland.c2me.notickvd.mixin;
+ 
+ import com.ishland.c2me.notickvd.common.Config;
+-import org.spongepowered.asm.mixin.Dynamic;
++import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerBlockTicking;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.Pseudo;
+ import org.spongepowered.asm.mixin.injection.At;
+@@ -9,10 +9,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+ 
+ @Pseudo
+-@Mixin(targets = "com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerBlockTicking", remap = false)
++@Mixin(value = ServerBlockTicking.class, remap = false)
+ public class MixinServerBlockTicking {
+ 
+-    @Dynamic
+     @Inject(method = "sendChunkToPlayer(Lcom/ishland/c2me/rewrites/chunksystem/common/ChunkLoadingContext;)V", at = @At("HEAD"), remap = false, cancellable = true)
+     private static void preventChunkSending(CallbackInfo ci) {
+         if (!Config.ensureChunkCorrectness) {
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
+index 32021941..4e3c9e48 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinThreadedAnvilChunkStorage.java
+@@ -81,18 +81,4 @@ public abstract class MixinThreadedAnvilChunkStorage {
+         return Config.ensureChunkCorrectness; // TODO config set to false unfixes MC-264947
+     }
+ 
+-    // private static synthetic method_20582(Lnet/minecraft/world/chunk/Chunk;)Z
+-    @Dynamic
+-    @Inject(method = "method_20582", at = @At("RETURN"), cancellable = true) // TODO lambda expression of the 1st filter "chunk instanceof ReadOnlyChunk || chunk instanceof WorldChunk"
+-    private static void onSaveFilter1(Chunk chunk, CallbackInfoReturnable<Boolean> cir) {
+-        if (true) return;
+-        if (chunk instanceof WorldChunk worldChunk) {
+-            final ServerWorld serverWorld = (ServerWorld) worldChunk.getWorld();
+-            final IServerChunkManager serverChunkManager = (IServerChunkManager) serverWorld.getChunkManager();
+-            final ChunkTicketManagerExtension ticketManager =
+-                    (ChunkTicketManagerExtension) serverChunkManager.getTicketManager();
+-            cir.setReturnValue(cir.getReturnValueZ() && !ticketManager.getNoTickOnlyChunks().contains(chunk.getPos().toLong()));
+-        }
+-    }
+-
+ }
+diff --git a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+index da5feb8d..c03ffb8f 100644
+--- a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
++++ b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+@@ -4,12 +4,12 @@
+   "package": "com.ishland.c2me.notickvd.mixin",
+   "plugin": "com.ishland.c2me.base.common.ModuleMixinPlugin",
+   "mixins": [
+-    "MixinChunkGenerationSteps",
+     "MixinChunkHolder",
+     "MixinChunkTicketManager",
+     "MixinChunkTicketManagerNearbyChunkTicketUpdater",
++    "MixinMinecraftServer",
+     "MixinPlayerManager",
+-    "MixinServerAccessible",
++    "MixinServerAccessibleChunkSending",
+     "MixinServerBlockTicking",
+     "MixinServerChunkManager",
+     "MixinThreadedAnvilChunkStorage",
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
+index 052508d6..8dd0a219 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
+@@ -3,6 +3,7 @@ package com.ishland.c2me.rewrites.chunksystem.common;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ReadFromDisk;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ReadFromDiskAsync;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerAccessible;
++import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerAccessibleChunkSending;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerBlockTicking;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerEntityTicking;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.VanillaWorldGenerationDelegate;
+@@ -33,6 +34,7 @@ public abstract class NewChunkStatus implements ItemStatus<ChunkPos, ChunkState,
+     public static final NewChunkStatus DISK;
+     private static final NewChunkStatus[] VANILLA_WORLDGEN_PIPELINE;
+     public static final NewChunkStatus SERVER_ACCESSIBLE;
++    public static final NewChunkStatus SERVER_ACCESSIBLE_CHUNK_SENDING;
+     public static final NewChunkStatus BLOCK_TICKING;
+     public static final NewChunkStatus ENTITY_TICKING;
+     public static final NewChunkStatus[] vanillaLevelToStatus;
+@@ -74,6 +76,8 @@ public abstract class NewChunkStatus implements ItemStatus<ChunkPos, ChunkState,
+         SERVER_ACCESSIBLE = new ServerAccessible(statuses.size());
+         statuses.add(SERVER_ACCESSIBLE);
+         VANILLA_WORLDGEN_PIPELINE[ChunkStatus.FULL.getIndex()] = SERVER_ACCESSIBLE;
++        SERVER_ACCESSIBLE_CHUNK_SENDING = new ServerAccessibleChunkSending(statuses.size());
++        statuses.add(SERVER_ACCESSIBLE_CHUNK_SENDING);
+         BLOCK_TICKING = new ServerBlockTicking(statuses.size());
+         statuses.add(BLOCK_TICKING);
+         ENTITY_TICKING = new ServerEntityTicking(statuses.size());
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+index d12661dc..efc8596a 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
+@@ -7,22 +7,17 @@ import com.ishland.c2me.base.mixin.access.IWorldChunk;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+ import com.ishland.c2me.rewrites.chunksystem.common.Config;
+-import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
+ import com.ishland.c2me.rewrites.chunksystem.common.compat.lithium.LithiumChunkStatusTrackerInvoker;
+ import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
+ import com.ishland.c2me.rewrites.chunksystem.common.threadstate.ChunkTaskWork;
+ import com.ishland.flowsched.scheduler.Cancellable;
+-import com.ishland.flowsched.scheduler.ItemHolder;
+-import com.ishland.flowsched.scheduler.KeyStatusPair;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+ import it.unimi.dsi.fastutil.shorts.ShortListIterator;
+ import net.minecraft.block.BlockState;
+ import net.minecraft.block.Blocks;
+ import net.minecraft.entity.EntityType;
+ import net.minecraft.nbt.NbtCompound;
+-import net.minecraft.server.world.ChunkLevels;
+-import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.math.BlockPos;
+ import net.minecraft.util.math.ChunkPos;
+@@ -40,22 +35,6 @@ import java.util.concurrent.CompletionStage;
+ 
+ public class ServerAccessible extends NewChunkStatus {
+ 
+-    private static final KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] deps;
+-
+-    static {
+-        final NewChunkStatus depStatus = NewChunkStatus.fromVanillaStatus(ChunkLevels.getStatusForAdditionalLevel(1));
+-        deps = new KeyStatusPair[]{
+-                new KeyStatusPair<>(new ChunkPos(-1, -1), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(-1, 0), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(-1, 1), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(0, -1), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(0, 1), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(1, -1), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(1, 0), depStatus),
+-                new KeyStatusPair<>(new ChunkPos(1, 1), depStatus),
+-        };
+-    }
+-
+     public ServerAccessible(int ordinal) {
+         super(ordinal, ChunkStatus.FULL);
+     }
+@@ -109,30 +88,10 @@ public class ServerAccessible extends NewChunkStatus {
+ 
+                 ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+                 ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+-
+-                if (needSendChunks()) {
+-                    sendChunkToPlayer(context.tacs(), context.holder());
+-                }
+             }
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+-    private static boolean needSendChunks() {
+-        return false;
+-    }
+-
+-    private static void sendChunkToPlayer(ServerChunkLoadingManager tacs, ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder) {
+-        final Chunk chunk = holder.getItem().get().chunk();
+-        if (chunk instanceof WorldChunk worldChunk) {
+-            CompletableFuture<?> completableFuturexx = holder.getUserData().get().getPostProcessingFuture();
+-            if (completableFuturexx.isDone()) {
+-                ((IThreadedAnvilChunkStorage) tacs).invokeSendToPlayers(worldChunk);
+-            } else {
+-                completableFuturexx.thenAcceptAsync(v -> ((IThreadedAnvilChunkStorage) tacs).invokeSendToPlayers(worldChunk), ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor());
+-            }
+-        }
+-    }
+-
+     private static WorldChunk toFullChunk(ProtoChunk protoChunk, ServerWorld serverWorld) {
+         WorldChunk worldChunk;
+         if (protoChunk instanceof WrapperProtoChunk) {
+@@ -166,21 +125,6 @@ public class ServerAccessible extends NewChunkStatus {
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+ 
+-    @Override
+-    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependencies(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
+-        return relativeToAbsoluteDependencies(holder, deps);
+-    }
+-
+-    @Override
+-    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependenciesToRemove(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
+-        return EMPTY_DEPENDENCIES;
+-    }
+-
+-    @Override
+-    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependenciesToAdd(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
+-        return EMPTY_DEPENDENCIES;
+-    }
+-
+     @Override
+     public String toString() {
+         return "minecraft:full, Border";
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessibleChunkSending.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessibleChunkSending.java
+new file mode 100644
+index 00000000..b82f83b6
+--- /dev/null
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessibleChunkSending.java
+@@ -0,0 +1,56 @@
++package com.ishland.c2me.rewrites.chunksystem.common.statuses;
++
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.flowsched.scheduler.Cancellable;
++import com.ishland.flowsched.scheduler.ItemHolder;
++import com.ishland.flowsched.scheduler.KeyStatusPair;
++import net.minecraft.util.math.ChunkPos;
++import net.minecraft.world.chunk.ChunkStatus;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CompletionStage;
++
++public class ServerAccessibleChunkSending extends NewChunkStatus {
++
++    private static final KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] deps;
++
++    static {
++        deps = EMPTY_DEPENDENCIES;
++    }
++
++    public ServerAccessibleChunkSending(int ordinal) {
++        super(ordinal, ChunkStatus.FULL);
++    }
++
++    @Override
++    public CompletionStage<Void> upgradeToThis(ChunkLoadingContext context, Cancellable cancellable) {
++        return CompletableFuture.completedFuture(null);
++    }
++
++    @Override
++    public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
++        return CompletableFuture.completedFuture(null);
++    }
++
++    @Override
++    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependencies(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
++        return relativeToAbsoluteDependencies(holder, deps);
++    }
++
++    @Override
++    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependenciesToRemove(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
++        return EMPTY_DEPENDENCIES;
++    }
++
++    @Override
++    public KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] getDependenciesToAdd(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, ?> holder) {
++        return EMPTY_DEPENDENCIES;
++    }
++
++    @Override
++    public String toString() {
++        return "minecraft:full, Border, Chunk Sending";
++    }
++}
+diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+index 2f9d3cc3..f63a2495 100644
+--- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
++++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+@@ -36,7 +36,7 @@ public class C2MECommands {
+     private static int noTickCommand(CommandContext<ServerCommandSource> ctx) {
+         final ServerChunkManager chunkManager = ctx.getSource().getWorld().toServerWorld().getChunkManager();
+         final ChunkTicketManager ticketManager = ((IServerChunkManager) chunkManager).getTicketManager();
+-        final long noTickPendingTicketUpdates = ((ChunkTicketManagerExtension) ticketManager).getPendingLoadsCount();
++        final long noTickPendingTicketUpdates = ((ChunkTicketManagerExtension) ticketManager).c2me$getPendingLoadsCount();
+         ctx.getSource().sendFeedback(() -> Text.of(String.format("No-tick chunk pending chunk loads: %d", noTickPendingTicketUpdates)), true);
+ 
+         return 0;

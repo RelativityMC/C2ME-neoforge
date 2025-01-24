@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Fri, 24 Jan 2025 22:56:37 +0800
+Subject: [PATCH] change: lower maxConcurrentChunkLoads for 1.21.1
+
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+index 64796be8..9f9f2df5 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+@@ -10,7 +10,7 @@ public class Config {
+             .key("noTickViewDistance.maxConcurrentChunkLoads")
+             .comment("No-tick view distance max concurrent chunk loads \n" +
+                     " Lower this for a better latency and higher this for a faster loading")
+-            .getLong(GlobalExecutors.GLOBAL_EXECUTOR_PARALLELISM * 2L, GlobalExecutors.GLOBAL_EXECUTOR_PARALLELISM * 2L, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
++            .getLong(GlobalExecutors.GLOBAL_EXECUTOR_PARALLELISM + 1, GlobalExecutors.GLOBAL_EXECUTOR_PARALLELISM + 1, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
+ 
+     public static final boolean compatibilityMode = new ConfigSystem.ConfigAccessor()
+             .key("noTickViewDistance.compatibilityMode")
