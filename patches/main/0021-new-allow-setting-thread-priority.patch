@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 27 Jan 2025 11:24:56 +0800
+Subject: [PATCH] new: allow setting thread priority
+
+Backported from 333ab1a32ab01ee899776b230f9ed13089ded1f5
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+index 9fd23703..e70e6c80 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+@@ -36,6 +36,16 @@ public class ModuleEntryPoint {
+                     """.indent(1))
+             .getString(DEFAULT_EXPRESSION, DEFAULT_EXPRESSION);
+ 
++    public static final long threadPoolPriority = new ConfigSystem.ConfigAccessor()
++            .key("threadPoolPriority")
++            .comment("""
++                    Sets the thread priority for worker threads
++                    
++                    References:
++                    - https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Thread.html#setPriority(int)
++                    """)
++            .getLong(Thread.NORM_PRIORITY - 1, Thread.NORM_PRIORITY - 1, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
++
+     public static final int defaultParallelism;
+ 
+     private static int tryEvaluateExpression(String expression) {
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/GlobalExecutors.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/GlobalExecutors.java
+index e5a81999..34485a08 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/GlobalExecutors.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/GlobalExecutors.java
+@@ -14,6 +14,7 @@ public class GlobalExecutors {
+     private static final AtomicInteger prioritizedSchedulerCounter = new AtomicInteger(0);
+     public static final ExecutorManager prioritizedScheduler = new ExecutorManager(GlobalExecutors.GLOBAL_EXECUTOR_PARALLELISM, thread -> {
+         thread.setDaemon(true);
++        thread.setPriority(Math.max(Thread.MIN_PRIORITY, Math.min(Thread.MAX_PRIORITY, (int) ModuleEntryPoint.threadPoolPriority)));
+         thread.setName("c2me-worker-%d".formatted(prioritizedSchedulerCounter.getAndIncrement()));
+     });
+ 

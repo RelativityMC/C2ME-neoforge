@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 27 Jan 2025 11:05:26 +0800
+Subject: [PATCH] change: make threads alloc more aggressive
+
+Backported from 2c331e72d09388b4199377397f44d270cf672713 with small changes
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+index 404ef427..9fd23703 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
+@@ -18,14 +18,11 @@ public class ModuleEntryPoint {
+                         1,
+                         min(
+                             if( is_windows,
+-                                (cpus / 1.6 - 2),
+-                                (cpus / 1.2 - 2)
+-                            ),
+-                            if( is_j9vm,
+-                                ( ( mem_gb - (if(is_client, 0.6, 0.2)) ) / 0.4 ),
+-                                ( ( mem_gb - (if(is_client, 1.2, 0.6)) ) / 0.6 )
+-                            )
+-                        ) - if(is_client, 2, 0)
++                                (cpus / 1.6),
++                                (cpus / 1.3)
++                            )  - if(is_client, 1, 0),
++                            ( ( mem_gb - (if(is_client, 1.2, 0.6)) ) / 0.6 )
++                        )
+                     )
+                 \040""";
+ 
