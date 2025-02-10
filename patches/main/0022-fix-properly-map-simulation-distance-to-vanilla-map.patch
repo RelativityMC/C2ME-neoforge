@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 10 Feb 2025 13:55:33 +0800
+Subject: [PATCH] fix: properly map simulation distance to vanilla map
+
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+index 37732ee8..b5da3682 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkTicketManager.java
+@@ -64,13 +64,9 @@ public class MixinChunkTicketManager implements ChunkTicketManagerExtension {
+         this.noTickSystem.tick();
+     }
+ 
+-    /**
+-     * @author ishland
+-     * @reason remap setSimulationDistance to the normal one
+-     */
+-    @Overwrite
+-    public void setSimulationDistance(int i) {
+-        this.nearbyChunkTicketUpdater.setWatchDistance(i);
++    @Inject(method = "setSimulationDistance", at = @At("HEAD"))
++    public void mapSimulationDistance(int simulationDistance, CallbackInfo ci) {
++        this.nearbyChunkTicketUpdater.setWatchDistance(simulationDistance);
+     }
+ 
+     /**
