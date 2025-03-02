@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Sun, 2 Mar 2025 21:00:28 +0800
+Subject: [PATCH] fix: ServerCore broadcast optimization compat
+
+
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/servercore/MixinServerChunkManager.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/servercore/MixinServerChunkManager.java
+new file mode 100644
+index 00000000..2eea9dce
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/servercore/MixinServerChunkManager.java
+@@ -0,0 +1,28 @@
++package com.ishland.c2me.notickvd.mixin.servercore;
++
++import com.bawnorton.mixinsquared.TargetHandler;
++import com.ishland.c2me.base.common.theinterface.IFastChunkHolder;
++import net.minecraft.server.world.ChunkHolder;
++import net.minecraft.server.world.ServerChunkManager;
++import net.minecraft.world.chunk.WorldChunk;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Redirect;
++
++@Mixin(ServerChunkManager.class)
++public class MixinServerChunkManager {
++
++    @TargetHandler(
++            mixin = "me.wesley1808.servercore.mixin.optimizations.ticking.chunk.broadcast.ServerChunkCacheMixin",
++            name = "servercore$broadcastChanges"
++    )
++    @Redirect(method = "@MixinSquared:Handler", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/world/ChunkHolder;getWorldChunk()Lnet/minecraft/world/chunk/WorldChunk;"), require = 0)
++    private WorldChunk includeAccessibleChunks(ChunkHolder instance) {
++        if (instance instanceof IFastChunkHolder fastChunkHolder) {
++            return fastChunkHolder.c2me$immediateWorldChunk();
++        } else {
++            return instance.getAccessibleFuture().getNow(ChunkHolder.UNLOADED_WORLD_CHUNK).orElse(null);
++        }
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+index be745776..a80b538f 100644
+--- a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
++++ b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+@@ -17,7 +17,8 @@
+     "MixinWorld",
+     "MixinWorldChunk",
+     "ext_render_distance.MixinServerConfigurationNetworkHandler",
+-    "ext_render_distance.MixinServerPlayNetworkHandler"
++    "ext_render_distance.MixinServerPlayNetworkHandler",
++    "servercore.MixinServerChunkManager"
+   ],
+   "client": [
+     "client.MixinIntegratedServer"
