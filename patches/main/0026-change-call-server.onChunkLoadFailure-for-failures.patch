@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Mon, 10 Mar 2025 14:27:26 +0800
+Subject: [PATCH] change: call server.onChunkLoadFailure for failures
+
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+index f9612a16..e85f01e4 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+@@ -4,6 +4,7 @@ import com.ishland.c2me.base.common.GlobalExecutors;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
+ import com.ishland.c2me.base.common.scheduler.SchedulingManager;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.c2me.base.mixin.access.IVersionedChunkStorage;
+ import com.ishland.flowsched.scheduler.DaemonizedStatusAdvancingScheduler;
+ import com.ishland.flowsched.scheduler.ExceptionHandlingAction;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+@@ -100,13 +101,8 @@ public class TheChunkSystem extends DaemonizedStatusAdvancingScheduler<ChunkPos,
+         } else {
+             LOGGER.error("Error downgrading chunk {} to \"{}\"", holder.getKey(), nextStatus, throwable);
+         }
+-        if (throwable instanceof CrashException crashException) {
+-            final MinecraftServer server = ((IThreadedAnvilChunkStorage) this.tacs).getWorld().getServer();
+-            server.execute(() -> {
+-                final Path path = server.getRunDirectory().resolve("crash-reports").resolve("crash-" + Util.getFormattedCurrentTime() + "-server.txt");
+-                crashException.getReport().writeToFile(path, ReportType.MINECRAFT_CHUNK_IO_ERROR_REPORT);
+-            });
+-        }
++        final MinecraftServer server = ((IThreadedAnvilChunkStorage) this.tacs).getWorld().getServer();
++        server.execute(() -> server.onChunkLoadFailure(throwable, ((IVersionedChunkStorage) this.tacs).invokeGetStorageKey(), holder.getKey()));
+         return ExceptionHandlingAction.MARK_BROKEN;
+     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+index f7a06774..5025e5bd 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
+@@ -23,6 +23,7 @@ import net.minecraft.nbt.NbtElement;
+ import net.minecraft.registry.RegistryKeys;
+ import net.minecraft.server.WorldGenerationProgressListener;
+ import net.minecraft.server.world.ServerLightingProvider;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.math.ChunkPos;
+ import net.minecraft.world.ChunkSerializer;
+@@ -57,7 +58,10 @@ public class ReadFromDisk extends NewChunkStatus {
+ 
+     protected @NotNull CompletionStage<Void> finalizeLoading(ChunkLoadingContext context, Single<ProtoChunk> single) {
+         return single
+-                .doOnError(throwable -> ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().getServer().onChunkLoadFailure(throwable, ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(), context.holder().getKey()))
++                .doOnError(throwable -> {
++                    MinecraftServer server = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().getServer();
++                    server.execute(() -> server.onChunkLoadFailure(throwable, ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(), context.holder().getKey()));
++                })
+                 .onErrorResumeNext(throwable -> {
+                     try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
+                         if (Config.recoverFromErrors) {
