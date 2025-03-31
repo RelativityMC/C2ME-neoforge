@@ -5,14 +5,14 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 90763a60..81b34561 100644
+index ebc67c5b..416b11ec 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
  plugins {
      id 'java-library'
--    id 'fabric-loom' version '1.7-SNAPSHOT' apply false
-+    id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
+-    id 'fabric-loom' version '1.10-SNAPSHOT' apply false
++    id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
      id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
@@ -22,14 +22,14 @@ index 90763a60..81b34561 100644
      afterEvaluate {
 -        if (it.plugins.hasPlugin("fabric-loom")) {
 +        if (it.plugins.hasPlugin("dev.architectury.loom")) {
-             migrateMappings.configure {
-                 outputDir = project.file("src/main/java")
-             }
-@@ -55,29 +55,27 @@ allprojects {
+             afterEvaluate {
+                 migrateMappings.configure {
+                     outputDir = project.file("build/remappedSrc")
+@@ -63,29 +63,27 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
-+        maven { url "https://maven.neoforged.net/releases/" }
++        maven { url = "https://maven.neoforged.net/releases/" }
      }
  }
  
@@ -62,7 +62,7 @@ index 90763a60..81b34561 100644
      loom {
          def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
          accessWidenerPath = file
-@@ -91,12 +89,15 @@ configure (allprojects - project(":tests")) {
+@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
                  ideConfigGenerated project.rootProject == project
              }
          }
@@ -72,14 +72,14 @@ index 90763a60..81b34561 100644
      }
  
      processResources {
-         inputs.property "version", project.version + "+" + project.minecraft_version
+         inputs.property "version", version + "+" + minecraft_version
  
 -        filesMatching("fabric.mod.json") {
 +        filesMatching("META-INF/neoforge.mods.toml") {
-             expand "version": project.version + "+" + project.minecraft_version
+             expand "version": version + "+" + minecraft_version
          }
      }
-@@ -105,6 +106,10 @@ configure (allprojects - project(":tests")) {
+@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
          from rootProject.file("LICENSE")
      }
  
@@ -90,7 +90,7 @@ index 90763a60..81b34561 100644
      java {
          withSourcesJar()
      }
-@@ -141,10 +146,11 @@ configure (allprojects - project(":tests")) {
+@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -102,9 +102,15 @@ index 90763a60..81b34561 100644
 +        compileOnly annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-common:${mixinsquared_version}")
 +        implementation "com.github.bawnorton.mixinsquared:mixinsquared-neoforge:${mixinsquared_version}"
          api "com.ishland.flowsched:flowsched"
+ 
+         testImplementation platform("org.junit:junit-bom:${junit_version}")
+         testImplementation 'org.junit.jupiter:junit-jupiter'
+         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+-        testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
      }
- }
-@@ -169,13 +175,20 @@ dependencies {
+ 
+     test {
+@@ -189,13 +194,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -128,7 +134,7 @@ index 90763a60..81b34561 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -223,14 +236,12 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+@@ -243,20 +255,19 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -148,16 +154,15 @@ index 90763a60..81b34561 100644
      }
  }
  
-@@ -239,6 +250,7 @@ String getVersionSuffix() {
-     exec {
+ String getVersionSuffix() {
+     def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
-         standardOutput = stdout
 +        workingDir = project.file("..")
-     }
+     }.standardOutput.asText.get()
      stdout = stdout.toString().strip()
      def suffix = ""
 diff --git a/c2me-base/build.gradle b/c2me-base/build.gradle
-index 52b3cf86..e096fb84 100644
+index bd953590..d8ba08a9 100644
 --- a/c2me-base/build.gradle
 +++ b/c2me-base/build.gradle
 @@ -19,6 +19,14 @@ remapJar {
@@ -204,7 +209,7 @@ index 0aa3ca5c..6d3e8c66 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index b7653d5e..404ef427 100644
+index 3ee23aab..cbefa655 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -2,8 +2,8 @@ package com.ishland.c2me.base;
@@ -218,9 +223,9 @@ index b7653d5e..404ef427 100644
  import net.objecthunter.exp4j.ExpressionBuilder;
  import net.objecthunter.exp4j.function.Function;
  
-@@ -39,18 +39,6 @@ public class ModuleEntryPoint {
-                     """.indent(1))
-             .getString(DEFAULT_EXPRESSION, DEFAULT_EXPRESSION);
+@@ -46,18 +46,6 @@ public class ModuleEntryPoint {
+                     """)
+             .getLong(Thread.NORM_PRIORITY - 1, Thread.NORM_PRIORITY - 1, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
  
 -    public static final boolean disableLoggingShutdownHook = new ConfigSystem.ConfigAccessor()
 -            .key("fixes.disableLoggingShutdownHook")
@@ -237,7 +242,7 @@ index b7653d5e..404ef427 100644
      public static final int defaultParallelism;
  
      private static int tryEvaluateExpression(String expression) {
-@@ -78,7 +66,7 @@ public class ModuleEntryPoint {
+@@ -85,7 +73,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
@@ -458,42 +463,36 @@ index 39f4423e..bfe4052e 100644
  
      public ExtRenderDistance(PacketByteBuf buf) {
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/registry/SerializerAccess.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/registry/SerializerAccess.java
-index 23bbedca..db52a56d 100644
+index 45a4196a..946a35b5 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/registry/SerializerAccess.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/registry/SerializerAccess.java
-@@ -11,7 +11,7 @@ import net.minecraft.world.chunk.Chunk;
+@@ -2,8 +2,6 @@ package com.ishland.c2me.base.common.registry;
+ 
+ import com.ibm.asyncutil.util.Either;
+ import net.minecraft.nbt.NbtCompound;
+-import net.minecraft.server.world.ServerWorld;
+-import net.minecraft.world.chunk.Chunk;
+ import net.minecraft.world.chunk.SerializedChunk;
+ 
+ /**
+@@ -11,7 +9,7 @@ import net.minecraft.world.chunk.SerializedChunk;
   */
  public class SerializerAccess {
  
--    private final static Serializer VANILLA = (world, chunk) -> Either.left(ChunkSerializer.serialize(world, chunk));
-+    public final static Serializer VANILLA = (world, chunk, preferNbtCompound) -> Either.left(ChunkSerializer.serialize(world, chunk));
+-    private final static Serializer VANILLA = serializable -> Either.left(serializable.serialize());
++    public final static Serializer VANILLA = (serializable, preferNbtCompound) -> Either.left(serializable.serialize());
  
      private static Serializer activeSerializer = null;
  
-@@ -31,7 +31,7 @@ public class SerializerAccess {
+@@ -31,7 +29,7 @@ public class SerializerAccess {
  
      public interface Serializer {
  
--        com.ibm.asyncutil.util.Either<NbtCompound, byte[]> serialize(ServerWorld world, Chunk chunk);
-+        com.ibm.asyncutil.util.Either<NbtCompound, byte[]> serialize(ServerWorld world, Chunk chunk, boolean preferNbtCompound);
+-        com.ibm.asyncutil.util.Either<NbtCompound, byte[]> serialize(SerializedChunk serializable);
++        com.ibm.asyncutil.util.Either<NbtCompound, byte[]> serialize(SerializedChunk serializable, boolean preferNbtCompound);
  
      }
  
-diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
-index 3fc42fbb..c571a354 100644
---- a/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
-+++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/util/ASMUtils.java
-@@ -1,3 +1,4 @@
-+/*
- package com.ishland.c2me.base.common.util;
- 
- import net.fabricmc.loader.api.FabricLoader;
-@@ -39,3 +40,4 @@ public class ASMUtils {
-         return 'L' + mappingResolver.mapClassName(INTERMEDIARY, unmappedClass.replace('/', '.')).replace('.', '/') + ";";
-     }
- }
-+*/
-\ No newline at end of file
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/util/HookCompatibility.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/util/HookCompatibility.java
 new file mode 100644
 index 00000000..bbc64010
@@ -628,6 +627,32 @@ index 00000000..b8dc03d6
 +    }
 +
 +}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
+index d49f808d..4ded5a9a 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
+@@ -24,8 +24,8 @@ public class MixinDedicatedServerWatchdog {
+ 
+     @Shadow @Final private static Logger LOGGER;
+ 
+-    @Inject(method = "createCrashReport", at = @At(value = "INVOKE", target = "Ljava/lang/management/ThreadInfo;getThreadId()J"))
+-    private static void prependThreadInstrumentation(String message, long threadId, CallbackInfoReturnable<CrashReport> cir, @Local StringBuilder stringBuilder, @Local ThreadInfo threadInfo) {
++    @Inject(method = "createWatchdogCrashReport", at = @At(value = "INVOKE", target = "Ljava/lang/management/ThreadInfo;getThreadId()J"))
++    private static void prependThreadInstrumentation(String message, long threadId, String message1, CallbackInfoReturnable<CrashReport> cir, @Local StringBuilder stringBuilder, @Local ThreadInfo threadInfo) {
+         String state = null;
+         try {
+             state = ThreadInstrumentation.printState(threadInfo);
+@@ -37,8 +37,8 @@ public class MixinDedicatedServerWatchdog {
+         }
+     }
+ 
+-    @Inject(method = "createCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0), locals = LocalCapture.CAPTURE_FAILHARD)
+-    private static void addInstrumentationData(String message, long threadId, CallbackInfoReturnable<CrashReport> cir, ThreadMXBean threadMXBean, ThreadInfo[] threadInfos, StringBuilder stringBuilder, Error error, CrashReport crashReport) {
++    @Inject(method = "createWatchdogCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0))
++    private static void addInstrumentationData(String message, long threadId, String message1, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport crashReport) {
+         CrashReportSection section = crashReport.addElement("Thread trace dump (obtained on a best-effort basis)");
+         try {
+             for (Map.Entry<Thread, ThreadState> entry : ThreadInstrumentation.entrySet()) {
 diff --git a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..76bac433
@@ -661,12 +686,12 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 0acd763e..48f56132 100644
+index 15a38759..cd1a1bbb 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -54,8 +54,9 @@
-     "access.IXoroshiro128PlusPlusRandomImpl",
-     "priority.MixinServerChunkManager",
+@@ -56,8 +56,9 @@
+     "instrumentation.MixinServerChunkManager",
+     "report.MixinDedicatedServerWatchdog",
      "scheduler.MixinThreadedAnvilChunkStorage",
 -    "theinterface.MixinStorageIoWorker",
 -    "util.log4j2shutdownhookisnomore.MixinMain",
@@ -677,6 +702,19 @@ index 0acd763e..48f56132 100644
 +    "network.MixinClientCommonNetworkHandler"
    ]
  }
+diff --git a/c2me-base/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
+index ba7b34b5..27b2734c 100644
+--- a/c2me-base/src/main/resources/c2me.mixins.json
++++ b/c2me-base/src/main/resources/c2me.mixins.json
+@@ -2,7 +2,7 @@
+   "required": true,
+   "minVersion": "0.8",
+   "package": "com.ishland.c2me.mixin",
+-  "compatibilityLevel": "JAVA_16",
++  "compatibilityLevel": "JAVA_21",
+   "mixinPriority": 1100,
+   "mixins": [
+   ],
 diff --git a/c2me-base/src/main/resources/fabric.mod.json b/c2me-base/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index 8feffc9a..00000000
@@ -1160,17 +1198,6 @@ index 11104c69..4ac10b14 100644
 +        ])
 +    }
 +}
-diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
-index 539e1efb..35f246db 100644
---- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
-+++ b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/asm/ASMTransformerMakeVolatile.java
-@@ -1,6 +1,5 @@
- package com.ishland.c2me.fixes.worldgen.threading_issues.asm;
- 
--import com.ishland.c2me.base.common.util.ASMUtils;
- import org.objectweb.asm.Opcodes;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.tree.ClassNode;
 diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
 index 64d9c2ae..b5f8136b 100644
 --- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
@@ -1374,13 +1401,15 @@ index f8c7fb82..00000000
 -  }
 -}
 diff --git a/c2me-notickvd/build.gradle b/c2me-notickvd/build.gradle
-index 11104c69..cf7e746b 100644
+index 6d46744f..1e4ca266 100644
 --- a/c2me-notickvd/build.gradle
 +++ b/c2me-notickvd/build.gradle
-@@ -2,3 +2,10 @@ moduleDependencies(project, [
-         "c2me-base",
+@@ -3,3 +3,12 @@ moduleDependencies(project, [
+         "c2me-rewrites-chunk-system",
  ])
  
++test.enabled = false // TODO unit testing on NF
++
 +jar {
 +    manifest {
 +        attributes([
@@ -1389,7 +1418,7 @@ index 11104c69..cf7e746b 100644
 +    }
 +}
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
-index d8737977..822c62b5 100644
+index 45b415ae..64796be8 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 @@ -3,7 +3,6 @@ package com.ishland.c2me.notickvd.common;
@@ -1578,16 +1607,16 @@ index 00000000..3767cb79
 +side = "BOTH"
 diff --git a/c2me-notickvd/src/main/resources/fabric.mod.json b/c2me-notickvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 8b87f08f..00000000
+index 08b8e676..00000000
 --- a/c2me-notickvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,38 +0,0 @@
+@@ -1,39 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-notickvd",
 -  "version": "${version}",
 -  "name": "Concurrent Chunk Management Engine (No Tick View Distance)",
--  "description": "An faster alternative implementation of simulation distance supporting view distance up to 248 chunks",
+-  "description": "Faster alternative implementation of simulation distance supporting view distance up to 65535 chunks",
 -  "environment": "*",
 -  "mixins": [
 -    "c2me-notickvd.mixins.json"
@@ -1595,7 +1624,8 @@ index 8b87f08f..00000000
 -  "depends": {
 -    "minecraft": "*",
 -    "fabricloader": "*",
--    "c2me-base": "*"
+-    "c2me-base": "*",
+-    "c2me-rewrites-chunk-system": "*"
 -  },
 -  "entrypoints": {
 -    "main": [
@@ -1636,19 +1666,18 @@ index 11104c69..cf6491e9 100644
 +    }
 +}
 diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
-index 1d330c31..71467b02 100644
+index 7bc073ec..4b352fdb 100644
 --- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
 +++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/MixinPlugin.java
-@@ -1,8 +1,6 @@
+@@ -1,7 +1,6 @@
  package com.ishland.c2me.opts.allocs;
  
  import com.ishland.c2me.base.common.ModuleMixinPlugin;
--import com.ishland.c2me.opts.allocs.asm.ASMTransformerNbtOpsMapBuilderFastUtilMap;
 -import net.fabricmc.loader.api.FabricLoader;
  import org.objectweb.asm.tree.ClassNode;
  import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  
-@@ -12,14 +10,14 @@ public class MixinPlugin extends ModuleMixinPlugin {
+@@ -11,14 +10,14 @@ public class MixinPlugin extends ModuleMixinPlugin {
      public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
          if (!super.shouldApplyMixin(targetClassName, mixinClassName)) return false;
  
@@ -1671,29 +1700,6 @@ index 1d330c31..71467b02 100644
  
          return true;
      }
-@@ -27,7 +25,7 @@ public class MixinPlugin extends ModuleMixinPlugin {
-     @Override
-     public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-         super.preApply(targetClassName, targetClass, mixinClassName, mixinInfo);
--        ASMTransformerNbtOpsMapBuilderFastUtilMap.transform(targetClass);
-+//        ASMTransformerNbtOpsMapBuilderFastUtilMap.transform(targetClass);
-     }
- 
- }
-diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
-index c9d122a0..1989c0f0 100644
---- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
-+++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/asm/ASMTransformerNbtOpsMapBuilderFastUtilMap.java
-@@ -1,3 +1,4 @@
-+/*
- package com.ishland.c2me.opts.allocs.asm;
- 
- import com.ishland.c2me.base.common.util.ASMUtils;
-@@ -72,3 +73,4 @@ public class ASMTransformerNbtOpsMapBuilderFastUtilMap {
-     }
- 
- }
-+*/
 diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
 index 8deb552b..5b2859b7 100644
 --- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
@@ -1755,7 +1761,7 @@ index 00000000..e54eab96
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
-index b9c3127d..4c62f92c 100644
+index 5514c015..4d1848c1 100644
 --- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 +++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 @@ -5,8 +5,6 @@
@@ -1766,7 +1772,7 @@ index b9c3127d..4c62f92c 100644
 -    "MixinNbtCompound1",
      "MixinNbtList",
      "MixinUtil",
-     "asm.ASMTargets",
+     "object_pooling_caching.MixinConfiguredFeature",
 diff --git a/c2me-opts-allocs/src/main/resources/fabric.mod.json b/c2me-opts-allocs/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index cb2dcf73..00000000
@@ -1806,56 +1812,6 @@ index cb2dcf73..00000000
 -    }
 -  }
 -}
-diff --git a/c2me-opts-chunk-access/build.gradle b/c2me-opts-chunk-access/build.gradle
-index 11104c69..ec3b882d 100644
---- a/c2me-opts-chunk-access/build.gradle
-+++ b/c2me-opts-chunk-access/build.gradle
-@@ -2,3 +2,10 @@ moduleDependencies(project, [
-         "c2me-base",
- ])
- 
-+jar {
-+    manifest {
-+        attributes([
-+                "MixinConfigs": "c2me-opts-chunk-access.mixins.json"
-+        ])
-+    }
-+}
-diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
-index 8f8785b8..12e7ff12 100644
---- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
-+++ b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/MixinPlugin.java
-@@ -1,7 +1,6 @@
- package com.ishland.c2me.opts.chunk_access;
- 
- import com.ishland.c2me.base.common.ModuleMixinPlugin;
--import com.ishland.c2me.opts.chunk_access.asm.ASMTransformerLithiumChunkAccessWorkaround;
- import org.objectweb.asm.tree.ClassNode;
- import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
- 
-@@ -10,7 +9,7 @@ public class MixinPlugin extends ModuleMixinPlugin {
-     @Override
-     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-         super.postApply(targetClassName, targetClass, mixinClassName, mixinInfo);
--        ASMTransformerLithiumChunkAccessWorkaround.transform(targetClass);
-+//        ASMTransformerLithiumChunkAccessWorkaround.transform(targetClass);
-     }
- 
- }
-diff --git a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
-index ed025ea0..ca9bd6eb 100644
---- a/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
-+++ b/c2me-opts-chunk-access/src/main/java/com/ishland/c2me/opts/chunk_access/asm/ASMTransformerLithiumChunkAccessWorkaround.java
-@@ -1,3 +1,4 @@
-+/*
- package com.ishland.c2me.opts.chunk_access.asm;
- 
- import com.ishland.c2me.base.common.util.ASMUtils;
-@@ -57,3 +58,4 @@ public class ASMTransformerLithiumChunkAccessWorkaround {
-     }
- 
- }
-+*/
 diff --git a/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..a97e1f0c
@@ -1895,45 +1851,6 @@ index 00000000..a97e1f0c
 +versionRange = "*"
 +ordering = "NONE"
 +side = "BOTH"
-diff --git a/c2me-opts-chunk-access/src/main/resources/fabric.mod.json b/c2me-opts-chunk-access/src/main/resources/fabric.mod.json
-deleted file mode 100644
-index 5bb0596d..00000000
---- a/c2me-opts-chunk-access/src/main/resources/fabric.mod.json
-+++ /dev/null
-@@ -1,33 +0,0 @@
--{
--  "schemaVersion": 1,
--  "id": "c2me-opts-chunk-access",
--  "version": "${version}",
--  "name": "Concurrent Chunk Management Engine (Optimizations/Chunk Access)",
--  "description": "Optimizations related to chunk access",
--  "environment": "*",
--  "mixins": [
--    "c2me-opts-chunk-access.mixins.json"
--  ],
--  "depends": {
--    "minecraft": "*",
--    "fabricloader": "*",
--    "c2me-base": "*"
--  },
--
--  "authors": [
--    "RelativityMC",
--    "ishland"
--  ],
--  "contact": {
--    "sources": "https://github.com/RelativityMC/C2ME-fabric",
--    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
--    "discord": "https://discord.gg/Kdy8NM5HW4",
--    "homepage": "https://modrinth.com/mod/c2me-fabric"
--  },
--  "license": "MIT",
--  "custom": {
--    "modmenu": {
--      "parent": "c2me"
--    }
--  }
--}
 diff --git a/c2me-opts-chunkio/build.gradle b/c2me-opts-chunkio/build.gradle
 index 11104c69..04c94622 100644
 --- a/c2me-opts-chunkio/build.gradle
@@ -2404,6 +2321,21 @@ index 449b2905..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-worldgen-biome-cache/build.gradle b/c2me-opts-worldgen-biome-cache/build.gradle
+index 11104c69..ec3b882d 100644
+--- a/c2me-opts-worldgen-biome-cache/build.gradle
++++ b/c2me-opts-worldgen-biome-cache/build.gradle
+@@ -2,3 +2,10 @@ moduleDependencies(project, [
+         "c2me-base",
+ ])
+ 
++jar {
++    manifest {
++        attributes([
++                "MixinConfigs": "c2me-opts-chunk-access.mixins.json"
++        ])
++    }
++}
 diff --git a/c2me-opts-worldgen-general/build.gradle b/c2me-opts-worldgen-general/build.gradle
 index 11104c69..598b513b 100644
 --- a/c2me-opts-worldgen-general/build.gradle
@@ -2599,13 +2531,15 @@ index 0e1acdf9..00000000
 -  }
 -}
 diff --git a/c2me-rewrites-chunk-serializer/build.gradle b/c2me-rewrites-chunk-serializer/build.gradle
-index 748a5aca..ec2df673 100644
+index 748a5aca..08ee08a5 100644
 --- a/c2me-rewrites-chunk-serializer/build.gradle
 +++ b/c2me-rewrites-chunk-serializer/build.gradle
-@@ -1,3 +1,11 @@
+@@ -1,3 +1,13 @@
  moduleDependencies(project, [
          "c2me-base",
  ])
++
++test.enabled = false // TODO unit testing on NF
 +
 +jar {
 +    manifest {
@@ -2627,7 +2561,7 @@ index dd6c384d..780dbc76 100644
  
  }
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
-index f97b9445..81c40653 100644
+index 07852737..17080460 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/TheMod.java
 @@ -5,12 +5,16 @@ import com.ishland.c2me.base.common.registry.SerializerAccess;
@@ -2645,18 +2579,18 @@ index f97b9445..81c40653 100644
 +
 +    public TheMod(IEventBus eventBus) {
          if (ModuleEntryPoint.enabled) {
--            SerializerAccess.registerSerializer((world, chunk) -> {
-+            SerializerAccess.registerSerializer((world, chunk, preferNbtCompound) -> {
+-            SerializerAccess.registerSerializer(serializable -> {
++            SerializerAccess.registerSerializer((serializable, preferNbtCompound) -> {
 +                if (!preferNbtCompound) {
                  NbtWriter nbtWriter = new NbtWriter();
                  nbtWriter.start(NbtElement.COMPOUND_TYPE);
-                 ChunkDataSerializer.write(world, chunk, nbtWriter);
+                 ChunkDataSerializer.write(serializable, nbtWriter);
 @@ -18,7 +22,11 @@ public class TheMod implements net.fabricmc.api.ModInitializer {
                  final byte[] data = nbtWriter.toByteArray();
                  nbtWriter.release();
                  return Either.right(data);
 +                } else {
-+                    return SerializerAccess.VANILLA.serialize(world, chunk, false);
++                    return SerializerAccess.VANILLA.serialize(serializable, true);
 +                }
              });
          }
@@ -2664,10 +2598,10 @@ index f97b9445..81c40653 100644
 +
  }
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
-index ab1b330a..e3b1e0e0 100644
+index 3158475c..2e636a28 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
-@@ -14,7 +14,6 @@ import com.ishland.c2me.rewrites.chunk_serializer.common.utils.StarLightUtil;
+@@ -12,7 +12,6 @@ import com.ishland.c2me.rewrites.chunk_serializer.common.utils.StarLightUtil;
  import com.mojang.serialization.Codec;
  import it.unimi.dsi.fastutil.longs.LongSet;
  import it.unimi.dsi.fastutil.shorts.ShortList;
@@ -2675,7 +2609,7 @@ index ab1b330a..e3b1e0e0 100644
  import net.minecraft.SharedConstants;
  import net.minecraft.block.Block;
  import net.minecraft.block.BlockState;
-@@ -155,7 +154,7 @@ public final class ChunkDataSerializer {
+@@ -146,7 +145,7 @@ public final class ChunkDataSerializer {
      private static final int STARLIGHT_LIGHT_VERSION = 8;
  
      // TODO: validating starlight compatibility?
@@ -2683,60 +2617,28 @@ index ab1b330a..e3b1e0e0 100644
 +    private static final boolean STARLIGHT = false; // TODO starlight doesn't exist on forge (yet)
  
      /**
-      * Mirror of {@link ChunkSerializer#serialize(ServerWorld, Chunk)}
+      * Mirror of {@link SerializedChunk#serialize(ServerWorld, Chunk)}
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
-index 8bc2cf1d..dd8d3f0f 100644
+index e289c538..757d0e5e 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
-@@ -3,19 +3,24 @@ package com.ishland.c2me.rewrites.chunk_serializer.mixin;
- import com.ishland.c2me.base.common.theinterface.IDirectStorage;
- import com.ishland.c2me.base.mixin.access.IVersionedChunkStorage;
- import com.ishland.c2me.rewrites.chunk_serializer.common.ChunkDataSerializer;
-+import com.ishland.c2me.base.common.util.HookCompatibility;
- import com.ishland.c2me.rewrites.chunk_serializer.common.NbtWriter;
- import com.mojang.datafixers.DataFixer;
-+import net.minecraft.nbt.NbtCompound;
- import net.minecraft.nbt.NbtElement;
- import net.minecraft.server.world.ServerChunkLoadingManager;
- import net.minecraft.server.world.ServerWorld;
- import net.minecraft.structure.StructureStart;
- import net.minecraft.util.math.ChunkPos;
-+import net.minecraft.world.ChunkSerializer;
- import net.minecraft.world.chunk.Chunk;
- import net.minecraft.world.chunk.ChunkStatus;
- import net.minecraft.world.chunk.ChunkType;
+@@ -21,6 +21,8 @@ import net.minecraft.world.chunk.SerializedChunk;
  import net.minecraft.world.poi.PointOfInterestStorage;
  import net.minecraft.world.storage.StorageKey;
  import net.minecraft.world.storage.VersionedChunkStorage;
 +import net.neoforged.neoforge.common.NeoForge;
 +import net.neoforged.neoforge.event.level.ChunkDataEvent;
+ import org.jetbrains.annotations.Nullable;
  import org.slf4j.Logger;
  import org.spongepowered.asm.mixin.Final;
- import org.spongepowered.asm.mixin.Mixin;
-@@ -78,6 +83,7 @@ public abstract class MixinThreadedAnvilChunkStorage extends VersionedChunkStora
+@@ -92,6 +94,7 @@ public abstract class MixinThreadedAnvilChunkStorage extends VersionedChunkStora
  
-             this.world.getProfiler().visit("chunkSave");
- 
-+            if (HookCompatibility.isChunkSaveEventFree()) {
+             this.chunksBeingSavedCount.incrementAndGet();
+             SerializedChunk chunkSerializer = SerializedChunk.fromChunk(this.world, chunk);
++            NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, chunk.getWorld() != null ? chunk.getWorld() : this.world, chunkSerializer));
              //region start replaced code
              // NbtCompound nbtCompound = ChunkSerializer.serialize(this.world, chunk);
-             NbtWriter nbtWriter = new NbtWriter();
-@@ -102,6 +108,15 @@ public abstract class MixinThreadedAnvilChunkStorage extends VersionedChunkStora
- //            });
-             ((IDirectStorage) ((IVersionedChunkStorage) this).getWorker()).setRawChunkData(chunkPos, nbtWriter.toByteArray());
-             nbtWriter.release();
-+            } else {
-+                NbtCompound compoundtag = ChunkSerializer.serialize(this.world, chunk);
-+                NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, chunk.getWorld() != null ? chunk.getWorld() : this.world, compoundtag));
-+                ChunkPos pos = chunk.getPos();
-+                this.setNbt(pos, compoundtag).exceptionally(throwable -> {
-+                    this.world.getServer().onChunkSaveFailure(throwable, this.getStorageKey(), pos);
-+                    return null;
-+                });
-+            }
- 
-             //endregion end replaced code
- 
+             CompletableFuture<byte[]> serializationFuture = CompletableFuture.supplyAsync(() -> {
 diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..342b93f9
@@ -2922,109 +2824,119 @@ index e6fc18a3..2268c457 100644
              t.printStackTrace();
          }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index 97e80743..9500c367 100644
+index 2967f26c..afb441ac 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-@@ -1,6 +1,5 @@
- package com.ishland.c2me.rewrites.chunksystem.common.statuses;
- 
--import com.ishland.c2me.base.common.config.ModStatuses;
- import com.ishland.c2me.base.common.util.RxJavaUtils;
- import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
- import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
-@@ -123,7 +122,7 @@ public class ReadFromDisk extends NewChunkStatus {
-                 loadedToWorld = false;
-             }
- 
--            if (loadedToWorld && ModStatuses.fabric_lifecycle_events_v1 && chunk instanceof WorldChunk worldChunk) {
-+            if (loadedToWorld && chunk instanceof WorldChunk worldChunk) {
-                 LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
-             }
- 
-diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
-index 5634cdbe..620b492b 100644
---- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
-+++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
-@@ -1,10 +1,10 @@
+@@ -1,7 +1,6 @@
  package com.ishland.c2me.rewrites.chunksystem.common.statuses;
  
  import com.ishland.c2me.base.common.GlobalExecutors;
 -import com.ishland.c2me.base.common.config.ModStatuses;
  import com.ishland.c2me.base.common.registry.SerializerAccess;
- import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
  import com.ishland.c2me.base.common.theinterface.IDirectStorage;
-+import com.ishland.c2me.base.common.util.HookCompatibility;
- import com.ishland.c2me.base.common.util.RxJavaUtils;
- import com.ishland.c2me.base.mixin.access.ISerializingRegionBasedStorage;
- import com.ishland.c2me.base.mixin.access.IServerLightingProvider;
-@@ -27,6 +27,7 @@ import io.reactivex.rxjava3.core.Single;
- import io.reactivex.rxjava3.schedulers.Schedulers;
- import it.unimi.dsi.fastutil.Pair;
- import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-+import net.minecraft.nbt.NbtCompound;
- import net.minecraft.nbt.NbtElement;
- import net.minecraft.registry.RegistryKeys;
- import net.minecraft.server.world.ServerChunkLoadingManager;
-@@ -40,6 +41,8 @@ import net.minecraft.world.chunk.ProtoChunk;
+ import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+@@ -39,6 +38,8 @@ import net.minecraft.world.chunk.SerializedChunk;
  import net.minecraft.world.chunk.UpgradeData;
  import net.minecraft.world.chunk.WorldChunk;
  import net.minecraft.world.chunk.WrapperProtoChunk;
 +import net.neoforged.neoforge.common.NeoForge;
 +import net.neoforged.neoforge.event.level.ChunkDataEvent;
+ import org.jetbrains.annotations.NotNull;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -90,12 +91,14 @@ public class ReadFromDisk extends NewChunkStatus {
+                 .map(chunkSerializer -> {
+                     try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, true))) {
+                         if (chunkSerializer.isPresent()) {
+-                            return chunkSerializer.get().convert(
++                            ProtoChunk chunk = chunkSerializer.get().convert(
+                                     ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
+                                     ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
+                                     ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
+                                     context.holder().getKey()
+                             );
++                            NeoForge.EVENT_BUS.post(new ChunkDataEvent.Load(chunk, chunkSerializer.get()));
++                            return chunk;
+                         } else {
+                             return createEmptyProtoChunk(context);
+                         }
+@@ -166,7 +169,7 @@ public class ReadFromDisk extends NewChunkStatus {
+                             worldChunk.setLoadedToWorld(false);
+                         }
+ 
+-                        if (loadedToWorld.get() && ModStatuses.fabric_lifecycle_events_v1 && chunk instanceof WorldChunk worldChunk) {
++                        if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
+                             LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
+                         }
+ 
+@@ -211,7 +214,7 @@ public class ReadFromDisk extends NewChunkStatus {
+             SerializedChunk serializer = SerializedChunk.fromChunk(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), chunk);
+             return CompletableFuture.supplyAsync(() -> {
+                         try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
+-                            return SerializerAccess.getSerializer().serialize(serializer);
++                            return SerializerAccess.getSerializer().serialize(serializer, false);
+                         }
+                     }, GlobalExecutors.prioritizedScheduler.executor(16) /* boost priority as we are serializing an unloaded chunk */)
+                     .thenCompose((either) -> {
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+index 14119f80..8f4d0782 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDiskAsync.java
+@@ -1,5 +1,10 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
++import com.ishland.c2me.base.common.GlobalExecutors;
++import com.ishland.c2me.base.common.registry.SerializerAccess;
++import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
++import com.ishland.c2me.base.common.theinterface.IDirectStorage;
++import com.ishland.c2me.base.common.util.HookCompatibility;
+ import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.common.util.RxJavaUtils;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+@@ -16,8 +21,19 @@ import io.reactivex.rxjava3.core.Single;
+ import io.reactivex.rxjava3.schedulers.Schedulers;
+ import it.unimi.dsi.fastutil.Pair;
+ import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
++import net.minecraft.nbt.NbtCompound;
++import net.minecraft.nbt.NbtElement;
++import net.minecraft.registry.RegistryKeys;
++import net.minecraft.server.world.ServerChunkLoadingManager;
++import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.math.ChunkPos;
+ import net.minecraft.world.chunk.ProtoChunk;
++import net.minecraft.world.chunk.SerializedChunk;
++import net.minecraft.world.chunk.UpgradeData;
++import net.minecraft.world.chunk.WorldChunk;
++import net.minecraft.world.chunk.WrapperProtoChunk;
++import net.neoforged.neoforge.common.NeoForge;
++import net.neoforged.neoforge.event.level.ChunkDataEvent;
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -172,9 +175,7 @@ public class ReadFromDiskAsync extends ReadFromDisk {
-                     }
- 
-                     if (loadedToWorld.get() && chunk instanceof WorldChunk worldChunk) {
--                        if (ModStatuses.fabric_lifecycle_events_v1) {
--                            LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
--                        }
-+                        LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
-                         ((IThreadedAnvilChunkStorage) context.tacs()).getWorld().unloadEntities(worldChunk);
-                     }
- 
-@@ -197,21 +198,34 @@ public class ReadFromDiskAsync extends ReadFromDisk {
-             chunk.setNeedsSaving(false);
-             ChunkPos chunkPos = chunk.getPos();
- 
-+            boolean chunkSaveEventFree = HookCompatibility.isChunkSaveEventFree();
-+
-             AsyncSerializationManager.Scope scope = new AsyncSerializationManager.Scope(chunk, ((IThreadedAnvilChunkStorage) tacs).getWorld());
-             return CompletableFuture.supplyAsync(() -> {
-                         scope.open();
-                         AsyncSerializationManager.push(scope);
-                         try {
--                            return SerializerAccess.getSerializer().serialize(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk);
-+                            return SerializerAccess.getSerializer().serialize(((IThreadedAnvilChunkStorage) tacs).getWorld(), chunk, !chunkSaveEventFree);
-                         } finally {
-                             AsyncSerializationManager.pop(scope);
-                         }
-                     }, GlobalExecutors.prioritizedScheduler.executor(16) /* boost priority as we are serializing an unloaded chunk */)
--                    .thenAccept((either) -> {
-+                    .thenCompose((either) -> {
-                         if (either.left().isPresent()) {
--                            tacs.setNbt(chunkPos, either.left().get());
-+                            if (chunkSaveEventFree) {
-+                                tacs.setNbt(chunkPos, either.left().get());
-+                                return CompletableFuture.completedFuture(null);
-+                            } else {
-+                                NbtCompound nbt = either.left().get();
-+                                return CompletableFuture.runAsync(() -> NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, ((IThreadedAnvilChunkStorage) tacs).getWorld(), nbt)), ((IThreadedAnvilChunkStorage) tacs).getMainThreadExecutor())
-+                                        .thenRun(() -> tacs.setNbt(chunkPos, nbt));
-+                            }
-                         } else {
-+                            if (!chunkSaveEventFree) {
-+                                LOGGER.warn("Chunk serializer returned byte[] for {} directly despite not chunkSaveEventFree, events will not be called", chunkPos);
-+                            }
-                             ((IDirectStorage) ((IVersionedChunkStorage) tacs).getWorker()).setRawChunkData(chunkPos, either.right().get());
-+                            return CompletableFuture.completedFuture(null);
-                         }
-                     })
-                     .exceptionallyCompose(throwable -> {
+@@ -51,13 +67,15 @@ public class ReadFromDiskAsync extends ReadFromDisk {
+                         if (chunkSerializer.isPresent()) {
+                             ChunkIoMainThreadTaskUtils.push(mainThreadQueue);
+                             try {
++                                ProtoChunk chunk = chunkSerializer.get().convert(
++                                        ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
++                                        ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
++                                        ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
++                                        context.holder().getKey()
++                                );
++                                mainThreadQueue.add(() -> NeoForge.EVENT_BUS.post(new ChunkDataEvent.Load(chunk, chunkSerializer.get())));
+                                 return Pair.of(
+-                                        chunkSerializer.get().convert(
+-                                                ((IThreadedAnvilChunkStorage) context.tacs()).getWorld(),
+-                                                ((IThreadedAnvilChunkStorage) context.tacs()).getPointOfInterestStorage(),
+-                                                ((IVersionedChunkStorage) context.tacs()).invokeGetStorageKey(),
+-                                                context.holder().getKey()
+-                                        ),
++                                        chunk,
+                                         mainThreadQueue
+                                 );
+                             } finally {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index d7078509..7c651fdf 100644
+index f59052d1..d1e99870 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,7 +1,6 @@
@@ -3032,68 +2944,35 @@ index d7078509..7c651fdf 100644
  
  import com.google.common.base.Preconditions;
 -import com.ishland.c2me.base.common.config.ModStatuses;
+ import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
- import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
-@@ -100,9 +99,7 @@ public class ServerAccessible extends NewChunkStatus {
-                 worldChunk.setLoadedToWorld(true);
-                 worldChunk.updateAllBlockEntities();
-                 worldChunk.addChunkTickSchedulers(serverWorld);
--                if (ModStatuses.fabric_lifecycle_events_v1) {
--                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
+@@ -53,10 +52,8 @@ public class ServerAccessible extends NewChunkStatus {
+                     worldChunk.setLoadedToWorld(true);
+                     worldChunk.updateAllBlockEntities();
+                     worldChunk.addChunkTickSchedulers(serverWorld);
+-                    if (ModStatuses.fabric_lifecycle_events_v1) {
+-                        LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
+-                    }
 -                }
-+                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
-             }
++                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
++            }
  
-             ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
-diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
-index 47209ffd..7746bcbc 100644
---- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
-+++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinWorldChunk.java
-@@ -43,7 +43,7 @@ public abstract class MixinWorldChunk  extends Chunk {
-             List<ServerPlayerEntity> playersWatchingChunk = serverWorld.getChunkManager().chunkLoadingManager.getPlayersWatchingChunk(this.getPos(), false);
-             BlockEntityUpdateS2CPacket packet = BlockEntityUpdateS2CPacket.create(blockEntity);
-             for (ServerPlayerEntity player : playersWatchingChunk) {
--                player.networkHandler.sendPacket(packet);
-+                player.networkHandler.send(packet);
-             }
- 
-             return blockEntity;
+                 ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+                 ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
-index 4e579810..49f106a8 100644
+index f0f401a8..9a84364b 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
-@@ -2,6 +2,8 @@ package com.ishland.c2me.rewrites.chunksystem.mixin.async_serialization;
- 
- import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.AsyncSerializationManager;
- import com.ishland.c2me.rewrites.chunksystem.common.async_chunkio.ChunkIoMainThreadTaskUtils;
-+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
- import net.minecraft.nbt.NbtCompound;
- import net.minecraft.registry.RegistryWrapper;
- import net.minecraft.util.math.BlockPos;
-@@ -10,6 +12,8 @@ import net.minecraft.world.ChunkSerializer;
- import net.minecraft.world.chunk.Chunk;
+@@ -12,6 +12,8 @@ import net.minecraft.world.chunk.Chunk;
  import net.minecraft.world.chunk.ChunkSection;
+ import net.minecraft.world.chunk.SerializedChunk;
  import net.minecraft.world.poi.PointOfInterestStorage;
 +import net.neoforged.bus.api.Event;
 +import net.neoforged.bus.api.IEventBus;
  import org.slf4j.Logger;
  import org.spongepowered.asm.mixin.Final;
  import org.spongepowered.asm.mixin.Mixin;
-@@ -29,6 +33,12 @@ public class MixinChunkSerializer {
-         ChunkIoMainThreadTaskUtils.executeMain(() -> instance.initForPalette(chunkSectionPos, chunkSection));
-     }
- 
-+    @WrapOperation(method = "deserialize", at = @At(value = "INVOKE", target = "Lnet/neoforged/bus/api/IEventBus;post(Lnet/neoforged/bus/api/Event;)Lnet/neoforged/bus/api/Event;"), require = 2)
-+    private static <T extends Event> T onEventInvocation(IEventBus instance, T t, Operation<T> original) {
-+        ChunkIoMainThreadTaskUtils.executeMain(() -> original.call(instance, t));
-+        return t;
-+    }
-+
-     @Redirect(method = "serialize", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;getBlockEntityPositions()Ljava/util/Set;"))
-     private static Set<BlockPos> onChunkGetBlockEntityPositions(Chunk chunk) {
-         final AsyncSerializationManager.Scope scope = AsyncSerializationManager.getScope(chunk.getPos());
 diff --git a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..23b41ac3
@@ -3281,17 +3160,17 @@ index 2f384468..c718e14b 100644
 +    }
 +}
 diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
-index 7ac5ac88..2aa5b849 100644
+index 354b65dd..825ffa20 100644
 --- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
 +++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
-@@ -4,7 +4,6 @@ import com.ishland.c2me.base.mixin.access.IServerChunkManager;
- import com.ishland.c2me.notickvd.common.IChunkTicketManager;
+@@ -4,7 +4,6 @@ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.notickvd.common.ChunkLevelManagerExtension;
  import com.mojang.brigadier.CommandDispatcher;
  import com.mojang.brigadier.context.CommandContext;
 -import net.fabricmc.loader.api.FabricLoader;
  import net.minecraft.server.command.CommandManager;
  import net.minecraft.server.command.ServerCommandSource;
- import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ChunkLevelManager;
 @@ -22,15 +21,15 @@ public class C2MECommands {
                                          .requires(unused -> com.ishland.c2me.notickvd.ModuleEntryPoint.enabled)
                                          .executes(C2MECommands::noTickCommand)
@@ -3464,30 +3343,70 @@ index 00000000..7f2b7d2b
 +versionRange = "*"
 +ordering = "NONE"
 +side = "BOTH"
+diff --git a/c2me-threading-lighting/src/main/resources/fabric.mod.json b/c2me-threading-lighting/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 5a092ec9..00000000
+--- a/c2me-threading-lighting/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,34 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-threading-lighting",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Threading/Lighting)",
+-  "description": "Makes lighting onto its dedicated thread",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-threading-lighting.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*",
+-    "c2me-fixes-general-threading-issues": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "MIT",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
 diff --git a/gradle.properties b/gradle.properties
-index f0a3b060..bb00f7be 100644
+index b050a402..38db339c 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
  org.gradle.jvmargs=-Xmx4G
  org.gradle.parallel=true
  org.gradle.warning.mode=all
--fabric.loom.multiProjectOptimisation=true
+-#org.gradle.configuration-cache=true
 +#fabric.loom.multiProjectOptimisation=true
 +
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.1
- yarn_mappings=1.21.1+build.1
--loader_version=0.16.3
--fabric_version=0.107.0+1.21.1
+ minecraft_version=1.21.5
+ yarn_mappings=1.21.5+build.1
+-loader_version=0.16.10
+-fabric_version=0.119.5+1.21.5
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.1.71
++forge_version=21.5.14-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
- mod_version=0.3.0+alpha.0
+ mod_version=0.3.3+alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
@@ -3499,15 +3418,15 @@ index f0a3b060..bb00f7be 100644
  rxjava_version=3.1.8
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 4073f255..ffc53405 100644
+index 66f6d433..c02a0743 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -4,13 +4,16 @@ pluginManagement {
              name = 'Fabric'
              url = 'https://maven.fabricmc.net/'
          }
-+        maven { url "https://maven.architectury.dev/" }
-+        maven { url "https://files.minecraftforge.net/maven/" }
++        maven { url = "https://maven.architectury.dev/" }
++        maven { url = "https://files.minecraftforge.net/maven/" }
 +        mavenCentral()
          gradlePluginPortal()
      }
@@ -3587,7 +3506,7 @@ index 42418c6c..b57175bd 100644
              try {
 diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..e7d9e072
+index 00000000..4f7a29c1
 --- /dev/null
 +++ b/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,37 @@
@@ -3611,7 +3530,7 @@ index 00000000..e7d9e072
 +[[dependencies.c2me]]
 +modId = "minecraft"
 +type = "required"
-+versionRange = "[1.21.1,1.21.2)"
++versionRange = "[1.21.5,)"
 +ordering = "NONE"
 +side = "BOTH"
 +
@@ -3628,25 +3547,12 @@ index 00000000..e7d9e072
 +reason = "causes the world to save infinitely"
 +ordering = "NONE"
 +side = "BOTH"
-diff --git a/src/main/resources/c2me.mixins.json b/src/main/resources/c2me.mixins.json
-index ba7b34b5..27b2734c 100644
---- a/src/main/resources/c2me.mixins.json
-+++ b/src/main/resources/c2me.mixins.json
-@@ -2,7 +2,7 @@
-   "required": true,
-   "minVersion": "0.8",
-   "package": "com.ishland.c2me.mixin",
--  "compatibilityLevel": "JAVA_16",
-+  "compatibilityLevel": "JAVA_21",
-   "mixinPriority": 1100,
-   "mixins": [
-   ],
 diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index bb6a358a..00000000
+index 02a0f3a0..00000000
 --- a/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,42 +0,0 @@
+@@ -1,43 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me",
@@ -3675,9 +3581,10 @@ index bb6a358a..00000000
 -    ]
 -  },
 -  "depends": {
--    "fabricloader": ">=0.16.0",
+-    "fabricloader": ">=0.16.9",
 -    "java": ">=21",
--    "minecraft": ">=1.21"
+-    "minecraft": ">=1.21.4",
+-    "c2me-base": "*"
 -  },
 -  "conflicts": {
 -    "dynview": "*",
@@ -3690,7 +3597,7 @@ index bb6a358a..00000000
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 377b5f8e..30c77611 100644
+index 34592626..e8847e9c 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
 @@ -1,11 +1,11 @@
@@ -3709,10 +3616,10 @@ index 377b5f8e..30c77611 100644
  
      group = project.maven_group + ".tests"
 @@ -25,6 +25,7 @@ allprojects {
-             url "https://www.cursemaven.com"
+             url = "https://www.cursemaven.com"
              content { includeGroup "curse.maven" }
          }
-+        maven { url "https://maven.neoforged.net/releases/" }
++        maven { url = "https://maven.neoforged.net/releases/" }
      }
      loom {
          accessWidenerPath = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
@@ -3734,11 +3641,11 @@ index 377b5f8e..30c77611 100644
          implementation "com.ibm.async:asyncutil:${async_util_version}"
      }
      processResources {
-         inputs.property "version", project.version
+         inputs.property "version", version
  
 -        filesMatching("fabric.mod.json") {
 +        filesMatching("META-INF/neoforge.mods.toml") {
-             expand "version": project.version
+             expand "version": version
          }
      }
 diff --git a/tests/c2me-test/build.gradle b/tests/c2me-test/build.gradle
