@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Fri, 4 Apr 2025 22:08:56 +0800
+Subject: [PATCH] fix: remapping being weird
+
+
+diff --git a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/mixin/MixinThreadedAnvilChunkStorage.java
+index bae2be90..4ae37146 100644
+--- a/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/mixin/MixinThreadedAnvilChunkStorage.java
++++ b/c2me-threading-lighting/src/main/java/com/ishland/c2me/threading/lighting/mixin/MixinThreadedAnvilChunkStorage.java
+@@ -8,6 +8,7 @@ import net.minecraft.server.world.ServerChunkLoadingManager;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.util.thread.SimpleConsecutiveExecutor;
+ import net.minecraft.util.thread.TaskExecutor;
++import org.spongepowered.asm.mixin.Dynamic;
+ import org.spongepowered.asm.mixin.Final;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.Shadow;
+@@ -29,7 +30,15 @@ public class MixinThreadedAnvilChunkStorage {
+     private ServerWorld world;
+     private ExecutorService lightThread = null;
+ 
+-    @WrapOperation(method = "<init>", at = @At(value = "NEW", target = "(Ljava/util/concurrent/Executor;Ljava/lang/String;)Lnet/minecraft/util/thread/SimpleConsecutiveExecutor;"))
++    @Dynamic
++    @WrapOperation(
++            method = "<init>",
++            at = {
++                    @At(value = "NEW", target = "(Ljava/util/concurrent/Executor;Ljava/lang/String;)Lnet/minecraft/util/thread/SimpleConsecutiveExecutor;"),
++                    @At(value = "NEW", target = "(Ljava/util/concurrent/Executor;Ljava/lang/String;)Lnet/minecraft/util/thread/ConsecutiveExecutor;", remap = false), // mojmap direct ref
++            },
++            require = 2
++    )
+     private SimpleConsecutiveExecutor onLightExecutorInit(Executor executor, String name, Operation<SimpleConsecutiveExecutor> original) {
+         if (!name.equals("light")) return original.call(executor, name);
+         lightThread = new ThreadPoolExecutor(
+@@ -41,7 +50,7 @@ public class MixinThreadedAnvilChunkStorage {
+         return original.call(lightThread, name);
+     }
+ 
+-    @WrapOperation(method = "<init>", at = @At(value = "NEW", target = "(Lnet/minecraft/util/thread/TaskExecutor;Ljava/util/concurrent/Executor;)Lnet/minecraft/server/world/ChunkTaskScheduler;"))
++    @WrapOperation(method = "<init>", at = @At(value = "NEW", target = "(Lnet/minecraft/util/thread/TaskExecutor;Ljava/util/concurrent/Executor;)Lnet/minecraft/server/world/ChunkTaskScheduler;"), require = 2)
+     private ChunkTaskScheduler onLightExecutorInit1(TaskExecutor<?> arg, Executor executor, Operation<ChunkTaskScheduler> original) {
+         if (!arg.getName().equals("light")) original.call(arg, executor);
+         return original.call(arg, lightThread);
