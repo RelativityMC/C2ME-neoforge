@@ -3384,7 +3384,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index b050a402..38db339c 100644
+index b050a402..e7aff8ed 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3402,7 +3402,7 @@ index b050a402..38db339c 100644
 -loader_version=0.16.10
 -fabric_version=0.119.5+1.21.5
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.5.14-beta
++forge_version=21.5.24-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
