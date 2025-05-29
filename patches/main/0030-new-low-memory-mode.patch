@@ -1,0 +1,310 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Thu, 9 Jan 2025 13:17:17 +0800
+Subject: [PATCH] new: low memory mode
+
+Squashed commit of the following:
+
+commit ca620039bc3dc3f2b412d474d522ef7920088220
+Author: ishland <ishlandmc@yeah.net>
+Date:   Wed Jan 8 20:17:05 2025 +0800
+
+    fix: silence retries
+
+commit 8497bcd484667fcef0bb73b88d3b426855a56d50
+Merge: e73ffcc7 917a8663
+Author: ishland <ishlandmc@yeah.net>
+Date:   Wed Jan 8 20:12:14 2025 +0800
+
+    Merge branch 'dev/1.21.4' into feature/deferred-loading
+
+commit e73ffcc7abe93b4a38e766ed74c14a5559e5903a
+Author: ishland <ishlandmc@yeah.net>
+Date:   Wed Jan 8 20:12:00 2025 +0800
+
+    new: a toggle for low memory mode
+
+commit a5c5707605b6e4e2ace9a9eed26a6869db8a57c9
+Merge: c77f8611 a99b7bc1
+Author: ishland <ishlandmc@yeah.net>
+Date:   Fri Jan 3 11:17:36 2025 +0800
+
+    Merge branch 'dev/1.21.4' into feature/deferred-loading
+
+commit c77f8611c8370c541e5c9dff512343c108ec1ac8
+Author: ishland <ishlandmc@yeah.net>
+Date:   Wed Dec 25 22:05:03 2024 +0800
+
+    new: implement deferred loading
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkHolderVanillaInterface.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkHolderVanillaInterface.java
+index ade3f8e5..39c41b74 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkHolderVanillaInterface.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkHolderVanillaInterface.java
+@@ -3,6 +3,8 @@ package com.ishland.c2me.rewrites.chunksystem.common;
+ import com.ishland.c2me.base.common.theinterface.IFastChunkHolder;
+ import com.ishland.c2me.base.common.util.SneakyThrow;
+ import com.ishland.flowsched.scheduler.ItemHolder;
++import com.ishland.flowsched.scheduler.StatusAdvancingScheduler;
++import com.ishland.flowsched.util.Assertions;
+ import com.mojang.datafixers.util.Pair;
+ import net.minecraft.server.world.ChunkHolder;
+ import net.minecraft.server.world.ChunkLevelType;
+@@ -41,10 +43,14 @@ public class NewChunkHolderVanillaInterface extends ChunkHolder implements IFast
+     private static final List<ChunkStatus> CHUNK_STATUSES = ChunkStatus.createOrderedList();
+     private static final CompletableFuture<Void> COMPLETED_VOID_FUTURE = CompletableFuture.completedFuture(null);
+ 
++    private final TheChunkSystem chunkSystem;
+     private final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> newHolder;
++    private NewChunkStatus deferredStatus = null;
++    private NewChunkStatus loadedDeferredStatus = null;
+ 
+-    public NewChunkHolderVanillaInterface(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> newHolder, HeightLimitView world, LightingProvider lightingProvider, PlayersWatchingChunkProvider playersWatchingChunkProvider) {
++    public NewChunkHolderVanillaInterface(TheChunkSystem chunkSystem, ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> newHolder, HeightLimitView world, LightingProvider lightingProvider, PlayersWatchingChunkProvider playersWatchingChunkProvider) {
+         super(newHolder.getKey(), ChunkLevels.INACCESSIBLE, world, lightingProvider, (pos1, levelGetter, targetLevel, levelSetter) -> {}, playersWatchingChunkProvider);
++        this.chunkSystem = chunkSystem;
+         this.newHolder = newHolder;
+     }
+ 
+@@ -151,9 +157,61 @@ public class NewChunkHolderVanillaInterface extends ChunkHolder implements IFast
+         });
+     }
+ 
++    /**
++     * @apiNote it is the caller's responsibility to ensure the holder is kept loaded
++     */
++    public void updateDeferredStatus(NewChunkStatus status) {
++        synchronized (this) {
++            if (this.deferredStatus == status) return;
++            if (this.deferredStatus == null) { // && status != null
++                Assertions.assertTrue(this.loadedDeferredStatus == null);
++                this.deferredStatus = status;
++                return;
++            }
++            if (status == null) { // && this.deferredStatus != null
++                if (this.loadedDeferredStatus != null) {
++                    ChunkPos pos1 = this.getPos();
++                    this.chunkSystem.removeTicket(pos1, TicketTypeExtension.VANILLA_DEFERRED_LOAD, pos1, this.loadedDeferredStatus);
++                    this.loadedDeferredStatus = null;
++                }
++                this.deferredStatus = status;
++            }
++            // both nonnull and different
++            if (this.loadedDeferredStatus != null && this.loadedDeferredStatus.ordinal() > status.ordinal()) {
++                ChunkPos pos1 = this.getPos();
++                this.chunkSystem.removeTicket(pos1, TicketTypeExtension.VANILLA_DEFERRED_LOAD, pos1, this.loadedDeferredStatus);
++                this.loadedDeferredStatus = null;
++            }
++            this.deferredStatus = status;
++        }
++    }
++
++    private void triggerDeferredLoad(NewChunkStatus requestedStatus) {
++        if (!Config.lowMemoryMode) return;
++        synchronized (this) {
++            if (this.loadedDeferredStatus != null && this.loadedDeferredStatus.ordinal() >= requestedStatus.ordinal()) {
++                return; // nothing to do
++            }
++            if (this.deferredStatus == null || this.deferredStatus.ordinal() < requestedStatus.ordinal()) {
++                return; // not deferred
++            }
++            // the holder should be valid here
++            NewChunkStatus ticketToDiscard = this.loadedDeferredStatus;
++            ChunkPos pos1 = this.getPos();
++            ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder1 = this.chunkSystem.addTicket(pos1, TicketTypeExtension.VANILLA_DEFERRED_LOAD, pos1, requestedStatus, StatusAdvancingScheduler.NO_OP);
++            Assertions.assertTrue(holder1 == this.newHolder);
++            if (ticketToDiscard != null) {
++                this.chunkSystem.removeTicket(pos1, TicketTypeExtension.VANILLA_DEFERRED_LOAD, pos1, ticketToDiscard);
++            }
++            this.loadedDeferredStatus = requestedStatus;
++        }
++    }
++
+     @Override
+     public CompletableFuture<OptionalChunk<Chunk>> load(ChunkStatus requestedStatus, ServerChunkLoadingManager chunkLoadingManager) {
+-        final CompletableFuture<Void> futureForStatus = this.newHolder.getFutureForStatus0(NewChunkStatus.fromVanillaStatus(requestedStatus));
++        NewChunkStatus status = NewChunkStatus.fromVanillaStatus(requestedStatus);
++        triggerDeferredLoad(status);
++        final CompletableFuture<Void> futureForStatus = this.newHolder.getFutureForStatus0(status);
+         return requestedStatus == ChunkStatus.FULL ? wrapOptionalChunkFuture(futureForStatus) : wrapOptionalChunkProtoFuture(futureForStatus);
+     }
+ 
+@@ -414,7 +472,9 @@ public class NewChunkHolderVanillaInterface extends ChunkHolder implements IFast
+ 
+     @Override
+     protected CompletableFuture<OptionalChunk<Chunk>> getOrCreateFuture(ChunkStatus status) {
+-        final CompletableFuture<Void> futureForStatus = this.newHolder.getFutureForStatus0(NewChunkStatus.fromVanillaStatus(status));
++        NewChunkStatus status1 = NewChunkStatus.fromVanillaStatus(status);
++        triggerDeferredLoad(status1);
++        final CompletableFuture<Void> futureForStatus = this.newHolder.getFutureForStatus0(status1);
+         return status == ChunkStatus.FULL ? this.wrapOptionalChunkFuture(futureForStatus) : this.wrapOptionalChunkProtoFuture(futureForStatus);
+     }
+ 
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
+index 8dd0a219..fb3e3aaa 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/NewChunkStatus.java
+@@ -1,5 +1,6 @@
+ package com.ishland.c2me.rewrites.chunksystem.common;
+ 
++import com.ishland.c2me.rewrites.chunksystem.common.statuses.Deferred;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ReadFromDisk;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ReadFromDiskAsync;
+ import com.ishland.c2me.rewrites.chunksystem.common.statuses.ServerAccessible;
+@@ -31,6 +32,7 @@ public abstract class NewChunkStatus implements ItemStatus<ChunkPos, ChunkState,
+     public static final NewChunkStatus[] ALL_STATUSES;
+ 
+     public static final NewChunkStatus NEW;
++    public static final NewChunkStatus DEFERRED;
+     public static final NewChunkStatus DISK;
+     private static final NewChunkStatus[] VANILLA_WORLDGEN_PIPELINE;
+     public static final NewChunkStatus SERVER_ACCESSIBLE;
+@@ -58,6 +60,8 @@ public abstract class NewChunkStatus implements ItemStatus<ChunkPos, ChunkState,
+             }
+         };
+         statuses.add(NEW);
++        DEFERRED = new Deferred(statuses.size());
++        statuses.add(DEFERRED);
+         DISK = Config.asyncSerialization ? new ReadFromDiskAsync(statuses.size()) : new ReadFromDisk(statuses.size());
+         statuses.add(DISK);
+         VANILLA_WORLDGEN_PIPELINE = new NewChunkStatus[ChunkStatus.FULL.getIndex() + 1];
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+index e85f01e4..941a4752 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+@@ -109,7 +109,7 @@ public class TheChunkSystem extends DaemonizedStatusAdvancingScheduler<ChunkPos,
+     @Override
+     protected void onItemCreation(ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder) {
+         super.onItemCreation(holder);
+-        holder.getUserData().set(new NewChunkHolderVanillaInterface(holder, ((IThreadedAnvilChunkStorage) this.tacs).getWorld(), ((IThreadedAnvilChunkStorage) this.tacs).getLightingProvider(), this.tacs));
++        holder.getUserData().set(new NewChunkHolderVanillaInterface(this, holder, ((IThreadedAnvilChunkStorage) this.tacs).getWorld(), ((IThreadedAnvilChunkStorage) this.tacs).getLightingProvider(), this.tacs));
+         holder.getItem().set(new ChunkState(null, null, null));
+     }
+ 
+@@ -152,34 +152,67 @@ public class TheChunkSystem extends DaemonizedStatusAdvancingScheduler<ChunkPos,
+         Assertions.assertTrue(!Thread.holdsLock(this.managedTickets));
+         synchronized (this.managedTickets) {
+             final int oldLevel = this.managedTickets.put(pos, level);
+-            NewChunkStatus oldStatus = NewChunkStatus.fromVanillaLevel(oldLevel);
+-            NewChunkStatus newStatus = NewChunkStatus.fromVanillaLevel(level);
++            NewChunkStatus oldStatus = c2me$getDeferredStatusFromVanillaLevel(oldLevel);
++            NewChunkStatus newStatus = c2me$getDeferredStatusFromVanillaLevel(level);
+             final ChunkPos key = new ChunkPos(pos);
+             if (oldStatus != newStatus) {
+-                ChunkHolder vanillaHolder;
++                NewChunkHolderVanillaInterface vanillaHolder;
++                ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder;
++                boolean shouldReturnVanillaHolder;
+                 if (newStatus != this.getUnloadedStatus()) {
+-                    final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = this.addTicket(key, TicketTypeExtension.VANILLA_LEVEL, key, newStatus, NO_OP);
+-                    vanillaHolder = holder.getUserData().get();
++                    holder = this.addTicket(key, TicketTypeExtension.VANILLA_LEVEL, key, newStatus, NO_OP);
++                    shouldReturnVanillaHolder = true;
+                 } else {
+                     this.managedTickets.remove(pos);
+-                    vanillaHolder = null;
++                    holder = this.getHolder(key);
++                    shouldReturnVanillaHolder = false;
++                }
++                Assertions.assertTrue(holder != null, "Holder should be managed by the vanilla interface");
++                assert holder != null;
++                vanillaHolder = holder.getUserData().get();
++                if (Config.lowMemoryMode) {
++                    vanillaHolder.updateDeferredStatus(NewChunkStatus.fromVanillaLevel(level));
+                 }
++
+                 if (oldStatus != this.getUnloadedStatus()) {
+                     this.removeTicket(key, TicketTypeExtension.VANILLA_LEVEL, key, oldStatus);
+                 }
+-                return vanillaHolder;
++                return shouldReturnVanillaHolder ? vanillaHolder : null;
+             } else {
+-                if (newStatus != this.getUnloadedStatus()) {
+-                    final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = this.getHolder(key);
+-                    if (holder != null) {
+-                        return holder.getUserData().get();
+-                    }
++                final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = this.getHolder(key);
++                NewChunkHolderVanillaInterface vanillaHolder;
++                if (holder != null) {
++                    vanillaHolder = holder.getUserData().get();
++
++                } else {
++                    vanillaHolder = null;
++                }
++                if (Config.lowMemoryMode && vanillaHolder != null) {
++                    vanillaHolder.updateDeferredStatus(NewChunkStatus.fromVanillaLevel(level));
++                }
++                if (newStatus != this.getUnloadedStatus() && vanillaHolder != null) {
++                    return vanillaHolder;
+                 }
+                 return null;
+             }
+         }
+     }
+ 
++    private static NewChunkStatus c2me$getDeferredStatusFromVanillaLevel(int level) {
++        NewChunkStatus status = NewChunkStatus.fromVanillaLevel(level);
++        if (Config.lowMemoryMode) {
++            if (status == NewChunkStatus.NEW) {
++                return status;
++            } else if (status.ordinal() < NewChunkStatus.SERVER_ACCESSIBLE.ordinal()) {
++                return NewChunkStatus.DEFERRED;
++            } else {
++                return status;
++            }
++        } else {
++            return status;
++        }
++    }
++
+     public int vanillaIf$getManagedLevel(long pos) {
+         return this.managedTickets.get(pos);
+     }
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TicketTypeExtension.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TicketTypeExtension.java
+index c200e3c3..66143048 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TicketTypeExtension.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TicketTypeExtension.java
+@@ -8,6 +8,10 @@ public class TicketTypeExtension {
+      * Ticket type for vanilla level loading
+      */
+     public static final ItemTicket.TicketType VANILLA_LEVEL = new ItemTicket.TicketType("c2me:vanilla_level");
++    /**
++     * Ticket type for vanilla deferred level loading
++     */
++    public static final ItemTicket.TicketType VANILLA_DEFERRED_LOAD = new ItemTicket.TicketType("c2me:vanilla_deferred_load");
+     /**
+      * Ticket type for on-demand load off-thread
+      */
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/Deferred.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/Deferred.java
+new file mode 100644
+index 00000000..3fb8ed96
+--- /dev/null
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/Deferred.java
+@@ -0,0 +1,26 @@
++package com.ishland.c2me.rewrites.chunksystem.common.statuses;
++
++import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
++import com.ishland.flowsched.scheduler.Cancellable;
++import net.minecraft.world.chunk.ChunkStatus;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CompletionStage;
++
++public class Deferred extends NewChunkStatus {
++
++    public Deferred(int ordinal) {
++        super(ordinal, ChunkStatus.EMPTY);
++    }
++
++    @Override
++    public CompletionStage<Void> upgradeToThis(ChunkLoadingContext context, Cancellable cancellable) {
++        return CompletableFuture.completedFuture(null);
++    }
++
++    @Override
++    public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
++        return CompletableFuture.completedFuture(null);
++    }
++}
