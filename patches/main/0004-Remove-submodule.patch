@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Fri, 30 May 2025 17:36:35 +0800
+Subject: [PATCH] Remove submodule
+
+
+diff --git a/.gitmodules b/.gitmodules
+index 8132eca3..e69de29b 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,3 +0,0 @@
+-[submodule "FlowSched"]
+-	path = FlowSched
+-	url = https://github.com/RelativityMC/FlowSched.git
+diff --git a/FlowSched b/FlowSched
+deleted file mode 160000
+index 5210232a..00000000
+--- a/FlowSched
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 5210232ae17375c663aca4ea90b0f3528c55ca68
