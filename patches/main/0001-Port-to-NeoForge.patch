@@ -209,7 +209,7 @@ index 0aa3ca5c..6d3e8c66 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index 3ee23aab..cbefa655 100644
+index cebb961c..f4655bf6 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -2,8 +2,8 @@ package com.ishland.c2me.base;
@@ -239,10 +239,10 @@ index 3ee23aab..cbefa655 100644
 -            .incompatibleMod("textile_backup", "*")
 -            .getBoolean(true, false);
 -
-     public static final int defaultParallelism;
- 
-     private static int tryEvaluateExpression(String expression) {
-@@ -85,7 +73,7 @@ public class ModuleEntryPoint {
+     public static final boolean preventEarlyClientMovementTicks = new ConfigSystem.ConfigAccessor()
+             .key("fixes.preventEarlyClientMovementTicks")
+             .comment("""
+@@ -95,7 +83,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
@@ -252,7 +252,7 @@ index 3ee23aab..cbefa655 100644
                          .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
                          .evaluate()
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
-index 0e82da67..1ec7e49c 100644
+index ff42f822..bb3a0266 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 @@ -13,9 +13,6 @@ public final class TheMixinPlugin extends ModuleMixinPlugin {
@@ -262,9 +262,9 @@ index 0e82da67..1ec7e49c 100644
 -        if (mixinClassName.startsWith("com.ishland.c2me.base.mixin.util.log4j2shutdownhookisnomore."))
 -            return ModuleEntryPoint.disableLoggingShutdownHook;
 -
-         return true;
-     }
- }
+         if (mixinClassName.startsWith("com.ishland.c2me.base.mixin.client_movement."))
+             return ModuleEntryPoint.preventEarlyClientMovementTicks;
+ 
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
 index 7fd0863f..ff8f3dab 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
@@ -370,6 +370,45 @@ index 480df3b6..bc6c6f3c 100644
  
          }
  
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/LateModStatuses.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/LateModStatuses.java
+deleted file mode 100644
+index fb8edf68..00000000
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/LateModStatuses.java
++++ /dev/null
+@@ -1,33 +0,0 @@
+-package com.ishland.c2me.base.common.config;
+-
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-
+-public class LateModStatuses {
+-
+-    private static final Logger LOGGER = LoggerFactory.getLogger(ModStatuses.class);
+-    public static final boolean fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE = isAvailable0_fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE();
+-
+-    private static boolean isAvailable0_fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE() {
+-        if (!ModStatuses.fabric_lifecycle_events_v1) {
+-            LOGGER.info("Fabric Lifecycle Events (v1) not found, skipping compat");
+-            return false;
+-        }
+-        Class<?> clazzServerChunkEvents;
+-        try {
+-            clazzServerChunkEvents = Class.forName("net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents");
+-        } catch (ClassNotFoundException e) {
+-            LOGGER.warn("net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents not found, but fabric-loader claims fabric-lifecycle-events-v1 is present, outdated fabric-api?", e);
+-            return false;
+-        }
+-        try {
+-            clazzServerChunkEvents.getField("CHUNK_LEVEL_TYPE_CHANGE");
+-        } catch (NoSuchFieldException e) {
+-            LOGGER.warn("Lnet/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents;CHUNK_LEVEL_TYPE_CHANGE:Lnet/fabricmc/fabric/api/event/Event; not found, outdated fabric-api?", e);
+-            return false;
+-        }
+-
+-        return true;
+-    }
+-
+-}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ModStatuses.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ModStatuses.java
 deleted file mode 100644
 index 17eb6317..00000000
@@ -598,6 +637,37 @@ index 00000000..bbc64010
 +    }
 +
 +}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/fapi/IArrayBackedEvent.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/fapi/IArrayBackedEvent.java
+deleted file mode 100644
+index 0ac18883..00000000
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/access/fapi/IArrayBackedEvent.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package com.ishland.c2me.base.mixin.access.fapi;
+-
+-import org.spongepowered.asm.mixin.Mixin;
+-import org.spongepowered.asm.mixin.gen.Accessor;
+-
+-@Mixin(targets = "net.fabricmc.fabric.impl.base.event.ArrayBackedEvent", remap = false)
+-public interface IArrayBackedEvent<T> {
+-
+-    @Accessor("handlers")
+-    T[] c2me$getHandlers();
+-
+-}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
+index 3b53be0b..735c9eb7 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
+@@ -15,7 +15,7 @@ public class MixinClientPlayerEntity implements PlayerEntityExtension {
+ 
+     @Override
+     public void c2me$onForcedLoaded() {
+-        this.networkHandler.sendPacket(new PlayerLoadedC2SPacket());
++        this.networkHandler.send(new PlayerLoadedC2SPacket());
+     }
+ 
+ }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java
 new file mode 100644
 index 00000000..b8dc03d6
@@ -686,20 +756,28 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 15a38759..cd1a1bbb 100644
+index a35a85af..30737a27 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -56,8 +56,9 @@
+@@ -55,17 +55,16 @@
+     "access.IXoroshiro128PlusPlusRandom",
+     "access.IXoroshiro128PlusPlusRandomDeriver",
+     "access.IXoroshiro128PlusPlusRandomImpl",
+-    "access.fapi.IArrayBackedEvent",
+     "client_movement.MixinPlayerEntity",
      "instrumentation.MixinServerChunkManager",
      "report.MixinDedicatedServerWatchdog",
+     "scheduler.MixinServerChunkManager",
      "scheduler.MixinThreadedAnvilChunkStorage",
 -    "theinterface.MixinStorageIoWorker",
 -    "util.log4j2shutdownhookisnomore.MixinMain",
 -    "util.log4j2shutdownhookisnomore.MixinMinecraftDedicatedServer"
 +    "theinterface.MixinStorageIoWorker"
-+  ],
-+  "client": [
-+    "network.MixinClientCommonNetworkHandler"
+   ],
+   "client": [
++    "network.MixinClientCommonNetworkHandler",
+     "client_movement.MixinClientPlayerEntity"
++
    ]
  }
 diff --git a/c2me-base/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
@@ -2790,19 +2868,23 @@ index e6a1c51e..b5d915a8 100644
          if (MH_onChunkInaccessible != null) {
              try {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-index e6fc18a3..2268c457 100644
+index b552a8e9..bb3dd184 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-@@ -1,17 +1,15 @@
+@@ -1,10 +1,10 @@
  package com.ishland.c2me.rewrites.chunksystem.common.fapi;
  
+-import com.ishland.c2me.base.mixin.access.fapi.IArrayBackedEvent;
 -import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+ import net.minecraft.server.world.ChunkLevelType;
  import net.minecraft.server.world.ServerWorld;
  import net.minecraft.world.chunk.WorldChunk;
 +import net.neoforged.neoforge.common.NeoForge;
 +import net.neoforged.neoforge.event.level.ChunkEvent;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
  
- public class LifecycleEventInvoker {
+@@ -14,10 +14,7 @@ public class LifecycleEventInvoker {
  
      public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
          try {
@@ -2812,19 +2894,55 @@ index e6fc18a3..2268c457 100644
 -            }
 +            NeoForge.EVENT_BUS.post(new ChunkEvent.Load(chunk, newChunk));
          } catch (Throwable t) {
-             t.printStackTrace();
+             LOGGER.error("Failed to invoke chunk load event (world={}, pos={}, newChunk={})", world, chunk.getPos(), newChunk, t);
          }
-@@ -19,7 +17,7 @@ public class LifecycleEventInvoker {
+@@ -25,7 +22,7 @@ public class LifecycleEventInvoker {
  
      public static void invokeChunkUnload(ServerWorld world, WorldChunk chunk) {
          try {
 -            ServerChunkEvents.CHUNK_UNLOAD.invoker().onChunkUnload(world, chunk);
 +            NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
          } catch (Throwable t) {
-             t.printStackTrace();
+             LOGGER.error("Failed to invoke chunk unload event (world={}, pos={})", world, chunk.getPos(), t);
          }
+@@ -34,33 +31,11 @@ public class LifecycleEventInvoker {
+     private static boolean cachedNeedsInvokeChunkLevelTypeChange = false;
+ 
+     public static boolean needsInvokeChunkLevelTypeChange() {
+-        if (cachedNeedsInvokeChunkLevelTypeChange) return true;
+-        try {
+-            if (ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE instanceof IArrayBackedEvent<?> accessor0) {
+-                IArrayBackedEvent<ServerChunkEvents.LevelTypeChange> accessor = (IArrayBackedEvent<ServerChunkEvents.LevelTypeChange>) accessor0;
+-                if (accessor.c2me$getHandlers().length > 0) {
+-                    cachedNeedsInvokeChunkLevelTypeChange = true;
+-                    return true;
+-                }
+-            } else {
+-                LOGGER.warn("Unexpected Event implementation of ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE: {}", ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE.getClass().getName());
+-                cachedNeedsInvokeChunkLevelTypeChange = true;
+-                return true;
+-            }
+-            return false;
+-        } catch (Throwable t) {
+-            LOGGER.error("Failed to check if chunk level type change event is needed", t);
+-            cachedNeedsInvokeChunkLevelTypeChange = true;
+-            return true;
+-        }
++        return false; // noop
+     }
+ 
+     public static void invokeChunkLevelTypeChange(ServerWorld world, WorldChunk chunk, ChunkLevelType oldLevelType, ChunkLevelType newLevelType) {
+-        try {
+-            ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE.invoker().onChunkLevelTypeChange(world, chunk, oldLevelType, newLevelType);
+-        } catch (Throwable t) {
+-            LOGGER.error("Failed to invoke chunk level type change event (world={}, pos={}, oldLevelType={}, newLevelType={})", world, chunk.getPos(), oldLevelType, newLevelType, t);
+-        }
++        // noop
+     }
+ 
+ }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index 2967f26c..afb441ac 100644
+index 3b002fe2..fef1de42 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -1,7 +1,6 @@
@@ -2869,7 +2987,7 @@ index 2967f26c..afb441ac 100644
                              LifecycleEventInvoker.invokeChunkUnload(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), worldChunk);
                          }
  
-@@ -211,7 +214,7 @@ public class ReadFromDisk extends NewChunkStatus {
+@@ -221,7 +224,7 @@ public class ReadFromDisk extends NewChunkStatus {
              SerializedChunk serializer = SerializedChunk.fromChunk(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), chunk);
              return CompletableFuture.supplyAsync(() -> {
                          try (var ignored = ThreadInstrumentation.getCurrent().begin(new ChunkTaskWork(context, this, false))) {
@@ -2936,30 +3054,107 @@ index 14119f80..8f4d0782 100644
                                  );
                              } finally {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index f59052d1..d1e99870 100644
+index 61737382..24ab96be 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-@@ -1,7 +1,6 @@
+@@ -1,8 +1,6 @@
  package com.ishland.c2me.rewrites.chunksystem.common.statuses;
  
  import com.google.common.base.Preconditions;
+-import com.ishland.c2me.base.common.config.LateModStatuses;
 -import com.ishland.c2me.base.common.config.ModStatuses;
  import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
-@@ -53,10 +52,8 @@ public class ServerAccessible extends NewChunkStatus {
+@@ -55,14 +53,10 @@ public class ServerAccessible extends NewChunkStatus {
                      worldChunk.setLoadedToWorld(true);
                      worldChunk.updateAllBlockEntities();
                      worldChunk.addChunkTickSchedulers(serverWorld);
 -                    if (ModStatuses.fabric_lifecycle_events_v1) {
 -                        LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
 -                    }
--                }
 +                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
-+            }
+                 }
+ 
+-                if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE) {
+-                    LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
+-                }
++                LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
  
                  ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
                  ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+@@ -98,9 +92,7 @@ public class ServerAccessible extends NewChunkStatus {
+ //            worldChunk.setLoadedToWorld(false);
+ //            worldChunk.removeChunkTickSchedulers(((IThreadedAnvilChunkStorage) context.tacs()).getWorld());
+ 
+-            if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE) {
+-                LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.FULL, ChunkLevelType.INACCESSIBLE);
+-            }
++            LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.FULL, ChunkLevelType.INACCESSIBLE);
+             LithiumChunkStatusTrackerInvoker.invokeOnChunkInaccessible(((IThreadedAnvilChunkStorage) context.tacs()).getWorld(), context.holder().getKey());
+ 
+             worldChunk.setLevelTypeProvider(null);
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
+index ca435d8b..962e6735 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
+@@ -1,7 +1,6 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+ import com.google.common.base.Suppliers;
+-import com.ishland.c2me.base.common.config.LateModStatuses;
+ import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+@@ -74,9 +73,7 @@ public class ServerBlockTicking extends NewChunkStatus {
+                 sendChunkToPlayer(context);
+                 ((IThreadedAnvilChunkStorage) context.tacs()).getTotalChunksLoadedCount().incrementAndGet(); // never decremented in vanilla
+                 ((WorldChunkExtension) chunk).c2me$setBlockTicking(true);
+-                if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE) {
+-                    LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, chunk, ChunkLevelType.FULL, ChunkLevelType.BLOCK_TICKING);
+-                }
++                LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, chunk, ChunkLevelType.FULL, ChunkLevelType.BLOCK_TICKING);
+             }
+         }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+     }
+@@ -128,7 +125,7 @@ public class ServerBlockTicking extends NewChunkStatus {
+         ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+         final WorldChunk chunk = (WorldChunk) context.holder().getItem().get().chunk();
+         ((WorldChunkExtension) chunk).c2me$setBlockTicking(false);
+-        if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE && LifecycleEventInvoker.needsInvokeChunkLevelTypeChange()) {
++        if (false) {
+             return CompletableFuture.runAsync(() -> {
+                 LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, chunk, ChunkLevelType.BLOCK_TICKING, ChunkLevelType.FULL);
+             }, ((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor());
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerEntityTicking.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerEntityTicking.java
+index 4e4c8d29..359b2982 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerEntityTicking.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerEntityTicking.java
+@@ -1,6 +1,5 @@
+ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
+ 
+-import com.ishland.c2me.base.common.config.LateModStatuses;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+@@ -41,7 +40,7 @@ public class ServerEntityTicking extends NewChunkStatus {
+ 
+     @Override
+     public CompletionStage<Void> upgradeToThis(ChunkLoadingContext context, Cancellable cancellable) {
+-        if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE && LifecycleEventInvoker.needsInvokeChunkLevelTypeChange()) {
++        if (false) {
+             return CompletableFuture.runAsync(() -> {
+                 ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+                 final WorldChunk chunk = (WorldChunk) context.holder().getItem().get().chunk();
+@@ -53,7 +52,7 @@ public class ServerEntityTicking extends NewChunkStatus {
+ 
+     @Override
+     public CompletionStage<Void> downgradeFromThis(ChunkLoadingContext context, Cancellable cancellable) {
+-        if (LateModStatuses.fabric_lifecycle_events_v1_CHUNK_LEVEL_TYPE_CHANGE && LifecycleEventInvoker.needsInvokeChunkLevelTypeChange()) {
++        if (false) {
+             return CompletableFuture.runAsync(() -> {
+                 ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+                 final WorldChunk chunk = (WorldChunk) context.holder().getItem().get().chunk();
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
 index f0f401a8..9a84364b 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/async_serialization/MixinChunkSerializer.java
@@ -3384,7 +3579,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index b050a402..e7aff8ed 100644
+index e3106f58..d8c03af9 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3400,13 +3595,13 @@ index b050a402..e7aff8ed 100644
  minecraft_version=1.21.5
  yarn_mappings=1.21.5+build.1
 -loader_version=0.16.10
--fabric_version=0.119.5+1.21.5
+-fabric_version=0.122.0+1.21.5
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
 +forge_version=21.5.24-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
- mod_version=0.3.3+alpha.0
+ mod_version=0.3.4+alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
