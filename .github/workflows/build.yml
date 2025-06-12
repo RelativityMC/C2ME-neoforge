@@ -54,7 +54,7 @@ jobs:
         run: |
           cd C2ME-fabric-patched
           ./gradlew modrinth curseforge
-        if: github.ref == 'refs/heads/dev/1.21.5'
+        if: github.ref == 'refs/heads/dev/1.21.6'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_UPLOAD_TOKEN }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_API_TOKEN }}
