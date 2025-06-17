@@ -3542,7 +3542,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index e05f7b7c..ba70d89b 100644
+index e05f7b7c..9a4d2d8e 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3555,14 +3555,12 @@ index e05f7b7c..ba70d89b 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
--minecraft_version=1.21.6-rc1
--yarn_mappings=1.21.6-rc1+build.1
+ minecraft_version=1.21.6-rc1
+ yarn_mappings=1.21.6-rc1+build.1
 -loader_version=0.16.14
 -fabric_version=0.126.1+1.21.6
-+minecraft_version=1.21.6-pre4
-+yarn_mappings=1.21.6-pre4+build.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.5.0-alpha.1.21.6-pre4.20250611.162051
++forge_version=21.5.0-alpha.1.21.6-rc1.20250617.072928
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
@@ -3666,7 +3664,7 @@ index 42418c6c..b57175bd 100644
              try {
 diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..4f7a29c1
+index 00000000..61f6c102
 --- /dev/null
 +++ b/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,37 @@
@@ -3690,7 +3688,7 @@ index 00000000..4f7a29c1
 +[[dependencies.c2me]]
 +modId = "minecraft"
 +type = "required"
-+versionRange = "[1.21.5,)"
++versionRange = "[1.21.6-rc1,)"
 +ordering = "NONE"
 +side = "BOTH"
 +
