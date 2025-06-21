@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index ebc67c5b..f0725a62 100644
+index ebc67c5b..416b11ec 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,19 +25,11 @@ index ebc67c5b..f0725a62 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -63,29 +63,35 @@ allprojects {
+@@ -63,29 +63,27 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-+        maven {
-+            name = 'Maven for PR #2297' // https://github.com/neoforged/NeoForge/pull/2297
-+            url = 'https://prmaven.neoforged.net/NeoForge/pr2297'
-+            content {
-+                includeModule('net.neoforged', 'neoforge')
-+                includeModule('net.neoforged', 'testframework')
-+            }
-+        }
      }
  }
  
@@ -70,7 +62,7 @@ index ebc67c5b..f0725a62 100644
      loom {
          def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
          accessWidenerPath = file
-@@ -99,12 +105,15 @@ configure (allprojects - project(":tests")) {
+@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
                  ideConfigGenerated project.rootProject == project
              }
          }
@@ -87,7 +79,7 @@ index ebc67c5b..f0725a62 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -113,6 +122,10 @@ configure (allprojects - project(":tests")) {
+@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
          from rootProject.file("LICENSE")
      }
  
@@ -98,7 +90,7 @@ index ebc67c5b..f0725a62 100644
      java {
          withSourcesJar()
      }
-@@ -149,16 +162,16 @@ configure (allprojects - project(":tests")) {
+@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -118,7 +110,7 @@ index ebc67c5b..f0725a62 100644
      }
  
      test {
-@@ -189,13 +202,20 @@ dependencies {
+@@ -189,13 +194,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -142,7 +134,7 @@ index ebc67c5b..f0725a62 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -243,20 +263,19 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+@@ -243,20 +255,19 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -3542,7 +3534,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index e05f7b7c..9a4d2d8e 100644
+index e05f7b7c..711a1187 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3555,12 +3547,14 @@ index e05f7b7c..9a4d2d8e 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.6-rc1
- yarn_mappings=1.21.6-rc1+build.1
+-minecraft_version=1.21.6-rc1
+-yarn_mappings=1.21.6-rc1+build.1
 -loader_version=0.16.14
 -fabric_version=0.126.1+1.21.6
++minecraft_version=1.21.6
++yarn_mappings=1.21.6+build.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.5.0-alpha.1.21.6-rc1.20250617.072928
++forge_version=21.6.10-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
