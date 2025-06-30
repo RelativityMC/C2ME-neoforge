@@ -422,10 +422,10 @@ index 00000000..c9a0e7c0
 +    }
 +}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
-index 39f4423e..bfe4052e 100644
+index 39f4423e..ac286810 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
-@@ -1,23 +1,41 @@
+@@ -1,23 +1,40 @@
  package com.ishland.c2me.base.common.network;
  
  import com.ishland.c2me.base.common.C2MEConstants;
@@ -435,7 +435,6 @@ index 39f4423e..bfe4052e 100644
  import net.minecraft.network.packet.CustomPayload;
  import net.minecraft.util.Identifier;
 +import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-+import net.neoforged.neoforge.network.handling.DirectionalPayloadHandler;
 +import net.neoforged.neoforge.network.handling.IPayloadHandler;
 +
 +import java.util.concurrent.CopyOnWriteArrayList;
@@ -809,10 +808,10 @@ index 11104c69..4dcaf71f 100644
 +    }
 +}
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
-index 46a7897a..003c40b2 100644
+index 46a7897a..195feb72 100644
 --- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 +++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
-@@ -1,10 +1,14 @@
+@@ -1,10 +1,15 @@
  package com.ishland.c2me.client.uncapvd.common;
  
 +import com.ishland.c2me.base.common.network.ClientChannelRegisterPayloadEvent;
@@ -823,6 +822,7 @@ index 46a7897a..003c40b2 100644
  import net.minecraft.client.MinecraftClient;
 +import net.minecraft.client.network.ClientPlayNetworkHandler;
 +import net.minecraft.network.NetworkPhase;
++import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 +import net.neoforged.neoforge.common.NeoForge;
 +import net.neoforged.neoforge.network.PacketDistributor;
 +import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -830,7 +830,7 @@ index 46a7897a..003c40b2 100644
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -14,19 +18,21 @@ public class ClientExtNetworking {
+@@ -14,19 +19,21 @@ public class ClientExtNetworking {
  
      public static final Logger LOGGER = LoggerFactory.getLogger("C2ME ClientExtNetworking");
  
@@ -847,18 +847,18 @@ index 46a7897a..003c40b2 100644
 +        if (handler.getPhase() == NetworkPhase.PLAY && NetworkRegistry.hasChannel(handler, ExtRenderDistance.ID.id())) {
              LOGGER.info("Changing view distance to {} (play stage)", viewDistance);
 -            ClientPlayNetworking.send(new ExtRenderDistance(viewDistance));
-+            PacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
++            ClientPacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
              return;
          }
 -        if (catchExceptions(() -> ClientConfigurationNetworking.canSend(ExtRenderDistance.ID))) {
 +        if (handler.getPhase() == NetworkPhase.CONFIGURATION && NetworkRegistry.hasChannel(handler, ExtRenderDistance.ID.id())) {
              LOGGER.info("Changing view distance to {} (config stage)", viewDistance);
 -            ClientConfigurationNetworking.send(new ExtRenderDistance(viewDistance));
-+            PacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
++            ClientPacketDistributor.sendToServer(new ExtRenderDistance(viewDistance));
              return;
          }
      }
-@@ -39,10 +45,10 @@ public class ClientExtNetworking {
+@@ -39,10 +46,10 @@ public class ClientExtNetworking {
          }
      }
  
@@ -3534,7 +3534,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index e05f7b7c..711a1187 100644
+index df089065..e69212cf 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3547,14 +3547,14 @@ index e05f7b7c..711a1187 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
--minecraft_version=1.21.6-rc1
--yarn_mappings=1.21.6-rc1+build.1
+-minecraft_version=1.21.6
+-yarn_mappings=1.21.6+build.1
 -loader_version=0.16.14
--fabric_version=0.126.1+1.21.6
-+minecraft_version=1.21.6
-+yarn_mappings=1.21.6+build.1
+-fabric_version=0.127.0+1.21.6
++minecraft_version=1.21.7
++yarn_mappings=1.21.7+build.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.6.10-beta
++forge_version=21.7.1-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
