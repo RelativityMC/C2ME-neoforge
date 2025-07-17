@@ -3534,7 +3534,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index df089065..e69212cf 100644
+index 39f84de8..29300bf6 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3547,18 +3547,16 @@ index df089065..e69212cf 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
--minecraft_version=1.21.6
--yarn_mappings=1.21.6+build.1
+ minecraft_version=1.21.8
+ yarn_mappings=1.21.8+build.1
 -loader_version=0.16.14
--fabric_version=0.127.0+1.21.6
-+minecraft_version=1.21.7
-+yarn_mappings=1.21.7+build.1
+-fabric_version=0.129.0+1.21.8
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.7.1-beta
++forge_version=21.8.0-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
- mod_version=0.3.4+alpha.0
+ mod_version=0.3.5+alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
