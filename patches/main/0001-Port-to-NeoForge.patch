@@ -3549,7 +3549,7 @@ index 00000000..7f2b7d2b
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/gradle.properties b/gradle.properties
-index 583c0e62..858beb7c 100644
+index 8452f559..24da1c51 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -2,20 +2,24 @@
@@ -3580,7 +3580,7 @@ index 583c0e62..858beb7c 100644
 -night_config_version=3.6.5
 +#night_config_version=3.6.5
  exp4j_version=0.4.8
- rxjava_version=3.1.8
+ rxjava_version=3.1.12
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
 index 32f40a2d..1e6a4082 100644
