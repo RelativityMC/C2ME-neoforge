@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index fc1d4f0a..b3e311de 100644
+index 65900af6..03077e34 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,19 +25,11 @@ index fc1d4f0a..b3e311de 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -63,29 +63,35 @@ allprojects {
+@@ -63,29 +63,27 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-+        maven {
-+            name = "Maven for PR #2639" // https://github.com/neoforged/NeoForge/pull/2639
-+            url = uri("https://prmaven.neoforged.net/NeoForge/pr2639")
-+            content {
-+                includeModule("net.neoforged", "neoforge")
-+                includeModule("net.neoforged", "testframework")
-+            }
-+        }
      }
  }
  
@@ -70,7 +62,7 @@ index fc1d4f0a..b3e311de 100644
      loom {
          def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
          accessWidenerPath = file
-@@ -99,12 +105,15 @@ configure (allprojects - project(":tests")) {
+@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
                  ideConfigGenerated project.rootProject == project
              }
          }
@@ -87,7 +79,7 @@ index fc1d4f0a..b3e311de 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -113,6 +122,10 @@ configure (allprojects - project(":tests")) {
+@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
          from rootProject.file("LICENSE")
      }
  
@@ -98,7 +90,7 @@ index fc1d4f0a..b3e311de 100644
      java {
          withSourcesJar()
      }
-@@ -149,16 +162,16 @@ configure (allprojects - project(":tests")) {
+@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -118,7 +110,7 @@ index fc1d4f0a..b3e311de 100644
      }
  
      test {
-@@ -189,13 +202,20 @@ dependencies {
+@@ -189,13 +194,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -142,7 +134,7 @@ index fc1d4f0a..b3e311de 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -261,20 +281,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+@@ -261,20 +273,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -217,7 +209,7 @@ index 0aa3ca5c..6d3e8c66 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index cebb961c..f4655bf6 100644
+index cebb961c..7cbc5991 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -2,8 +2,8 @@ package com.ishland.c2me.base;
@@ -255,7 +247,7 @@ index cebb961c..f4655bf6 100644
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
 -                        .setVariable("is_client", FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? 1 : 0)
-+                        .setVariable("is_client", FMLEnvironment.dist == Dist.CLIENT ? 1 : 0)
++                        .setVariable("is_client", FMLEnvironment.getDist() == Dist.CLIENT ? 1 : 0)
                          .setVariable("cpus", Runtime.getRuntime().availableProcessors())
                          .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
                          .evaluate()
@@ -288,7 +280,7 @@ index 7fd0863f..ff8f3dab 100644
          if (!isEnabled) {
              LOGGER.info("Disabling {}", mixinPackage);
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-index 480df3b6..bc6c6f3c 100644
+index 480df3b6..deaf7b00 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 @@ -3,11 +3,16 @@ package com.ishland.c2me.base.common.config;
@@ -327,7 +319,7 @@ index 480df3b6..bc6c6f3c 100644
          public ConfigAccessor incompatibleMod(String modId, String predicate) {
              try {
 -                final Optional<ModContainer> optional = FabricLoader.getInstance().getModContainer(modId);
-+                LoadingModList loadingModList = FMLLoader.getLoadingModList();
++                LoadingModList loadingModList = FMLLoader.getCurrent().getLoadingModList();
 +                Optional<ModInfo> optional = loadingModList.getMods().stream().filter(modInfo1 -> modInfo1.getModId().equals(modId)).findFirst();
                  if (optional.isPresent()) {
 -                    final ModContainer modContainer = optional.get();
@@ -1255,7 +1247,7 @@ index 11104c69..4ac10b14 100644
 +    }
 +}
 diff --git a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
-index 64d9c2ae..b5f8136b 100644
+index 64d9c2ae..db890dd7 100644
 --- a/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
 +++ b/c2me-fixes-worldgen-threading-issues/src/main/java/com/ishland/c2me/fixes/worldgen/threading_issues/common/debug/SMAPSourceDebugExtension.java
 @@ -36,7 +36,8 @@
@@ -1273,7 +1265,7 @@ index 64d9c2ae..b5f8136b 100644
          }
          if (path == null) return null;
 -        final Path gameDir = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize();
-+        final Path gameDir = FMLLoader.getGamePath().toAbsolutePath().normalize();
++        final Path gameDir = FMLLoader.getCurrent().getGameDir().toAbsolutePath().normalize();
          return gameDir.relativize(path).toString();
      }
  
@@ -3286,7 +3278,7 @@ index 11104c69..4f5ad227 100644
 +    }
 +}
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
-index e6a1c51e..b5d915a8 100644
+index e6a1c51e..7f3ded5d 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
 @@ -1,8 +1,8 @@
@@ -3331,7 +3323,7 @@ index e6a1c51e..b5d915a8 100644
      }
  
 +    private static boolean lithiumExists() {
-+        return FMLLoader.getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("lithium"));
++        return FMLLoader.getCurrent().getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("lithium"));
 +    }
 +
      public static void invokeOnChunkInaccessible(ServerWorld world, ChunkPos pos) {
@@ -4049,7 +4041,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index f3461159..e522f8ed 100644
+index eba49ece..a0222b17 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4062,12 +4054,12 @@ index f3461159..e522f8ed 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.9-rc1
- yarn_mappings=1.21.9-rc1+build.1
+ minecraft_version=1.21.9
+ yarn_mappings=1.21.9+build.1
 -loader_version=0.17.2
--fabric_version=0.133.10+1.21.9
+-fabric_version=0.133.14+1.21.9
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.9.0-alpha.1.21.9-rc1.20250929.111741
++forge_version=21.9.0-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
