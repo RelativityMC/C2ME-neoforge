@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index e02e43ef..793b56da 100644
+index fc1d4f0a..b3e311de 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -15,7 +15,7 @@ index e02e43ef..793b56da 100644
 +    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
-     id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
+     id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
 @@ -32,7 +32,7 @@ configure(allprojects) {
      }
  
@@ -142,7 +142,7 @@ index e02e43ef..793b56da 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -243,20 +263,19 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
+@@ -261,20 +281,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -1474,7 +1474,7 @@ index 6d46744f..1e4ca266 100644
 +    }
 +}
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
-index 45b415ae..64796be8 100644
+index a7373e81..8c12b0ab 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 @@ -3,7 +3,6 @@ package com.ishland.c2me.notickvd.common;
@@ -1485,7 +1485,7 @@ index 45b415ae..64796be8 100644
  
  public class Config {
  
-@@ -24,9 +23,7 @@ public class Config {
+@@ -18,9 +17,7 @@ public class Config {
              .comment("""
                      Enable server-side support for extended render distance protocol (c2me:%s)
                      This allows requesting render distances higher than 127 chunks from the server
@@ -2977,40 +2977,21 @@ index 63e5432f..a03ce5fe 100644
 +    }
 +}
 diff --git a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
-index 7d0e3d58..d2149afd 100644
+index ac8102b5..d2149afd 100644
 --- a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
 +++ b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
-@@ -1,7 +1,5 @@
- package com.ishland.c2me.opts.worldgen.vanilla.mixin.structure_weight_sampler;
- 
--import com.google.common.collect.Iterators;
--import it.unimi.dsi.fastutil.objects.ObjectListIterator;
- import net.minecraft.structure.JigsawJunction;
- import net.minecraft.util.math.BlockBox;
- import net.minecraft.world.gen.StructureWeightSampler;
-@@ -18,9 +16,9 @@ import java.util.List;
+@@ -16,9 +16,9 @@ import java.util.List;
  @Mixin(StructureWeightSampler.class)
  public abstract class MixinStructureWeightSampler {
  
--    @Shadow(aliases = "field_61465") @Final private List<StructureWeightSampler.Piece> pieceList;
+-    @Shadow @Final private List<StructureWeightSampler.Piece> field_61465;
 +    @Shadow @Final protected List<StructureWeightSampler.Piece> field_61465;
  
--    @Shadow(aliases = "field_61466") @Final private List<JigsawJunction> junctionList;
+-    @Shadow @Final private List<JigsawJunction> field_61466;
 +    @Shadow @Final protected List<JigsawJunction> field_61466;
  
      @Shadow
      private static double getStructureWeight(int x, int y, int z, int yy) {
-@@ -36,8 +34,8 @@ public abstract class MixinStructureWeightSampler {
- 
-     @Unique
-     private void c2me$initArrays() {
--        this.c2me$pieceArray = this.pieceList.toArray(StructureWeightSampler.Piece[]::new);
--        this.c2me$junctionArray = this.junctionList.toArray(JigsawJunction[]::new);
-+        this.c2me$pieceArray = this.field_61465.toArray(StructureWeightSampler.Piece[]::new);
-+        this.c2me$junctionArray = this.field_61466.toArray(JigsawJunction[]::new);
-     }
- 
-     /**
 diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..83d9bdd1
@@ -4068,27 +4049,25 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 47cee8fa..cdd15304 100644
+index f3461159..e522f8ed 100644
 --- a/gradle.properties
 +++ b/gradle.properties
-@@ -2,20 +2,24 @@
- org.gradle.jvmargs=-Xmx5G
- org.gradle.parallel=true
- org.gradle.warning.mode=all
+@@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
+ gradle-curseforge-publish.interop.neoforged=false
+ gradle-curseforge-publish.interop.neogradle=false
+ 
 -#org.gradle.configuration-cache=true
 +#fabric.loom.multiProjectOptimisation=true
 +
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
--minecraft_version=1.21.9-pre4
--yarn_mappings=1.21.9-pre4+build.1
+ minecraft_version=1.21.9-rc1
+ yarn_mappings=1.21.9-rc1+build.1
 -loader_version=0.17.2
 -fabric_version=0.133.10+1.21.9
-+minecraft_version=1.21.9-pre3
-+yarn_mappings=1.21.9-pre3+build.3
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.9.0-alpha.1.21.9-pre3.20250923.155515
++forge_version=21.9.0-alpha.1.21.9-rc1.20250929.111741
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties

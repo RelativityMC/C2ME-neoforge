@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 793b56da..667d637e 100644
+index b3e311de..63d0cd70 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -226,13 +226,13 @@ dependencies {
@@ -24,14 +24,12 @@ index 793b56da..667d637e 100644
      changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
  }
  
-@@ -247,8 +247,9 @@ if (System.getenv("CURSEFORGE_TOKEN")) {
-             releaseType = 'alpha'
+@@ -250,7 +250,7 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+                 }
  
-             addGameVersion project.minecraft_version
--            addGameVersion "Fabric"
-+            addGameVersion "NeoForge"
-             addGameVersion "Java 21"
-+            addGameVersion "Java 22"
- 
-             mainArtifact(remapJar) {
-                 displayName = project.version + " devbuild for " + project.minecraft_version
+                 gameVersion("minecraft-" + matcher.group(1) + "-" + matcher.group(2), project.minecraft_version.replace('.', '-'))
+-                gameVersion("modloader", "fabric")
++                gameVersion("modloader", "neoforge")
+                 gameVersion("java", "java-22")
+                 gameVersion("java", "java-21")
+                 gameVersion("environment", "server")
