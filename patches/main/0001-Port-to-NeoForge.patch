@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 65900af6..03077e34 100644
+index ed1e0933..3b12a01b 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -4041,7 +4041,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index eba49ece..a0222b17 100644
+index 81cdb600..6599f9b0 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4054,16 +4054,16 @@ index eba49ece..a0222b17 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.9
- yarn_mappings=1.21.9+build.1
+ minecraft_version=1.21.10
+ yarn_mappings=1.21.10+build.1
 -loader_version=0.17.2
--fabric_version=0.133.14+1.21.9
+-fabric_version=0.134.0+1.21.9
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.9.0-beta
++forge_version=21.10.1-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
- mod_version=0.3.5+alpha.0
+ mod_version=0.3.6+alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
@@ -4072,7 +4072,7 @@ index eba49ece..a0222b17 100644
 -night_config_version=3.6.5
 +#night_config_version=3.6.5
  exp4j_version=0.4.8
- rxjava_version=3.1.8
+ rxjava_version=3.1.12
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
 index 66f6d433..034f80b9 100644
