@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Sun, 26 Oct 2025 00:05:03 +0800
+Subject: [PATCH] build: pin archloom
+
+
+diff --git a/build.gradle b/build.gradle
+index 58a27320..9ec498ef 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,6 +1,6 @@
+ plugins {
+     id 'java-library'
+-    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
++    id 'dev.architectury.loom' version '1.11.445' apply false
+     id "me.champeau.jmh" version "0.7.2"
+     id 'com.modrinth.minotaur' version '2.+' apply false
+     id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
+diff --git a/c2me-opts-natives-math/src/c/CMakeLists.txt b/c2me-opts-natives-math/src/c/CMakeLists.txt
+index 30597bea..f8170f6f 100644
+--- a/c2me-opts-natives-math/src/c/CMakeLists.txt
++++ b/c2me-opts-natives-math/src/c/CMakeLists.txt
+@@ -27,6 +27,6 @@ endif()
+ execute_process(COMMAND llvm-config --prefix OUTPUT_VARIABLE LLVM_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
+ 
+ target_include_directories(c2me-opts-natives-math PRIVATE includes/)
+-target_compile_options(c2me-opts-natives-math PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wpedantic -ffreestanding -ffile-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-compilation-dir=. -fdebug-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-prefix-map=${LLVM_PREFIX}=.../llvm-prefix -fno-math-errno -mprefer-vector-width=512 -ffp-contract=off -Rpass-analysis=loop-vectorize -mno-stack-arg-probe -fsave-optimization-record "SHELL:-mllvm -extra-vectorizer-passes" "SHELL:-mllvm -slp-vectorize-hor-store" "SHELL:-mllvm -slp-min-tree-size=1" "SHELL:-mllvm -slp-min-reg-size=64" "SHELL:-mllvm -slp-threshold=-1" "SHELL:-mllvm -enable-epilogue-vectorization">)
++target_compile_options(c2me-opts-natives-math PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wpedantic -ffreestanding -ffile-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-compilation-dir=. -fdebug-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-prefix-map=${LLVM_PREFIX}=.../llvm-prefix -fno-math-errno -mprefer-vector-width=512 -ffp-contract=off -Rpass-analysis=loop-vectorize -mno-stack-arg-probe -fsave-optimization-record "SHELL:-mllvm -extra-vectorizer-passes" "SHELL:-mllvm -slp-vectorize-hor-store" "SHELL:-mllvm -slp-min-tree-size=2" "SHELL:-mllvm -slp-min-reg-size=64" "SHELL:-mllvm -slp-threshold=-1" "SHELL:-mllvm -enable-epilogue-vectorization">)
+ target_link_options(c2me-opts-natives-math PRIVATE -v -nostdlib -fuse-ld=lld -ffile-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-compilation-dir=. -fdebug-prefix-map=${CMAKE_SOURCE_DIR}=. -fdebug-prefix-map=${LLVM_PREFIX}=.../llvm-prefix)
+ 
