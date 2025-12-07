@@ -5,14 +5,14 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index ed1e0933..3b12a01b 100644
+index ed1e0933..f9119574 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
  plugins {
      id 'java-library'
 -    id 'fabric-loom' version '1.11-SNAPSHOT' apply false
-+    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
++    id 'dev.architectury.loom' version '1.13-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
      id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
@@ -726,14 +726,15 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index a35a85af..df34ae58 100644
+index 255f5138..6f8e972b 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -55,17 +55,15 @@
+@@ -55,18 +55,16 @@
      "access.IXoroshiro128PlusPlusRandom",
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
 -    "access.fapi.IArrayBackedEvent",
+     "bugfixes.config_enforce_main.MixinServerConfigurationNetworkHandler",
      "client_movement.MixinPlayerEntity",
      "instrumentation.MixinServerChunkManager",
      "report.MixinDedicatedServerWatchdog",
@@ -1466,7 +1467,7 @@ index 6d46744f..1e4ca266 100644
 +    }
 +}
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
-index a7373e81..8c12b0ab 100644
+index 2ab00eb6..cfc7c14c 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 @@ -3,7 +3,6 @@ package com.ishland.c2me.notickvd.common;
@@ -1487,7 +1488,7 @@ index a7373e81..8c12b0ab 100644
 +                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID))
              .getBoolean(true, false);
  
-     public static final boolean ensureChunkCorrectness = new ConfigSystem.ConfigAccessor()
+     public static final boolean smoothChunkSendingRate = new ConfigSystem.ConfigAccessor()
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
 index e8383e1e..7f3661a7 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
@@ -4041,7 +4042,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 81cdb600..6599f9b0 100644
+index 2964d929..8697f156 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4056,10 +4057,10 @@ index 81cdb600..6599f9b0 100644
  # check these on https://fabricmc.net/versions.html
  minecraft_version=1.21.10
  yarn_mappings=1.21.10+build.1
--loader_version=0.17.2
+-loader_version=0.17.3
 -fabric_version=0.134.0+1.21.9
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.10.1-beta
++forge_version=21.10.64
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
