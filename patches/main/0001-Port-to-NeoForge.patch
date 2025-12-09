@@ -5,13 +5,13 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index ed1e0933..f9119574 100644
+index 4e3a650d..c841af33 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
  plugins {
      id 'java-library'
--    id 'fabric-loom' version '1.11-SNAPSHOT' apply false
+-    id 'fabric-loom' version '1.13-SNAPSHOT' apply false
 +    id 'dev.architectury.loom' version '1.13-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
@@ -25,11 +25,19 @@ index ed1e0933..f9119574 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -63,29 +63,27 @@ allprojects {
+@@ -63,29 +63,35 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
++        maven {
++            name = "Maven for PR #2815" // https://github.com/neoforged/NeoForge/pull/2815
++            url = uri("https://prmaven.neoforged.net/NeoForge/pr2815")
++            content {
++                includeModule("net.neoforged", "neoforge")
++                includeModule("net.neoforged", "testframework")
++            }
++        }
      }
  }
  
@@ -62,7 +70,7 @@ index ed1e0933..f9119574 100644
      loom {
          def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
          accessWidenerPath = file
-@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
+@@ -99,12 +105,15 @@ configure (allprojects - project(":tests")) {
                  ideConfigGenerated project.rootProject == project
              }
          }
@@ -79,7 +87,7 @@ index ed1e0933..f9119574 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
+@@ -113,6 +122,10 @@ configure (allprojects - project(":tests")) {
          from rootProject.file("LICENSE")
      }
  
@@ -90,7 +98,7 @@ index ed1e0933..f9119574 100644
      java {
          withSourcesJar()
      }
-@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
+@@ -149,16 +162,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -110,7 +118,7 @@ index ed1e0933..f9119574 100644
      }
  
      test {
-@@ -189,13 +194,20 @@ dependencies {
+@@ -189,13 +202,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -134,7 +142,7 @@ index ed1e0933..f9119574 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -261,20 +273,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+@@ -261,20 +281,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -209,7 +217,7 @@ index 0aa3ca5c..6d3e8c66 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index cebb961c..7cbc5991 100644
+index 3ee23aab..cdc9e1ad 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -2,8 +2,8 @@ package com.ishland.c2me.base;
@@ -239,10 +247,10 @@ index cebb961c..7cbc5991 100644
 -            .incompatibleMod("textile_backup", "*")
 -            .getBoolean(true, false);
 -
-     public static final boolean preventEarlyClientMovementTicks = new ConfigSystem.ConfigAccessor()
-             .key("fixes.preventEarlyClientMovementTicks")
-             .comment("""
-@@ -95,7 +83,7 @@ public class ModuleEntryPoint {
+     public static final int defaultParallelism;
+ 
+     private static int tryEvaluateExpression(String expression) {
+@@ -85,7 +73,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
@@ -252,7 +260,7 @@ index cebb961c..7cbc5991 100644
                          .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
                          .evaluate()
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
-index ff42f822..bb3a0266 100644
+index 0e82da67..1ec7e49c 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 @@ -13,9 +13,6 @@ public final class TheMixinPlugin extends ModuleMixinPlugin {
@@ -262,9 +270,9 @@ index ff42f822..bb3a0266 100644
 -        if (mixinClassName.startsWith("com.ishland.c2me.base.mixin.util.log4j2shutdownhookisnomore."))
 -            return ModuleEntryPoint.disableLoggingShutdownHook;
 -
-         if (mixinClassName.startsWith("com.ishland.c2me.base.mixin.client_movement."))
-             return ModuleEntryPoint.preventEarlyClientMovementTicks;
- 
+         return true;
+     }
+ }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
 index 7fd0863f..ff8f3dab 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
@@ -625,19 +633,6 @@ index 0ac18883..00000000
 -    T[] c2me$getHandlers();
 -
 -}
-diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
-index 3b53be0b..735c9eb7 100644
---- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
-+++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/client_movement/MixinClientPlayerEntity.java
-@@ -15,7 +15,7 @@ public class MixinClientPlayerEntity implements PlayerEntityExtension {
- 
-     @Override
-     public void c2me$onForcedLoaded() {
--        this.networkHandler.sendPacket(new PlayerLoadedC2SPacket());
-+        this.networkHandler.send(new PlayerLoadedC2SPacket());
-     }
- 
- }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/network/MixinClientCommonNetworkHandler.java
 new file mode 100644
 index 00000000..b8dc03d6
@@ -726,16 +721,15 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 255f5138..6f8e972b 100644
+index bbeb127e..ea1fe988 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -55,18 +55,16 @@
+@@ -55,14 +55,15 @@
      "access.IXoroshiro128PlusPlusRandom",
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
 -    "access.fapi.IArrayBackedEvent",
      "bugfixes.config_enforce_main.MixinServerConfigurationNetworkHandler",
-     "client_movement.MixinPlayerEntity",
      "instrumentation.MixinServerChunkManager",
      "report.MixinDedicatedServerWatchdog",
      "scheduler.MixinServerChunkManager",
@@ -744,10 +738,10 @@ index 255f5138..6f8e972b 100644
 -    "util.log4j2shutdownhookisnomore.MixinMain",
 -    "util.log4j2shutdownhookisnomore.MixinMinecraftDedicatedServer"
 +    "theinterface.MixinStorageIoWorker"
-   ],
-   "client": [
++  ],
++  "client": [
 +    "network.MixinClientCommonNetworkHandler",
-     "client_movement.MixinClientPlayerEntity"
++    "client_movement.MixinClientPlayerEntity"
    ]
  }
 diff --git a/c2me-base/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
@@ -808,10 +802,10 @@ index 8feffc9a..00000000
 -  }
 -}
 diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
-index 11104c69..4dcaf71f 100644
+index fe9764c0..8944e190 100644
 --- a/c2me-client-uncapvd/build.gradle
 +++ b/c2me-client-uncapvd/build.gradle
-@@ -2,3 +2,10 @@ moduleDependencies(project, [
+@@ -2,6 +2,13 @@ moduleDependencies(project, [
          "c2me-base",
  ])
  
@@ -822,6 +816,17 @@ index 11104c69..4dcaf71f 100644
 +        ])
 +    }
 +}
+ repositories {
+     maven {
+         name = "CaffeineMC"
+@@ -10,6 +17,6 @@ repositories {
+ }
+ 
+ dependencies {
+-    modImplementation "net.caffeinemc:sodium-fabric-api:0.7.3-SNAPSHOT+mc1.21.10-build.778"
++    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.0-SNAPSHOT+mc1.21.11-rc3-build.795"
+ }
+ 
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 index 46a7897a..195feb72 100644
 --- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
@@ -964,10 +969,10 @@ index f0bef029..bb7587a2 100644
  
 diff --git a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..c98ae3d9
+index 00000000..2289abcf
 --- /dev/null
 +++ b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,37 @@
 +modLoader="javafml"
 +loaderVersion="*"
 +license="MIT"
@@ -988,6 +993,9 @@ index 00000000..c98ae3d9
 +[[mixins]]
 +config="c2me-client-uncapvd.mixins.json"
 +
++[modproperties.c2me_client_uncapvd]
++"sodium:config_api_user" = "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
++
 +[[dependencies.c2me_client_uncapvd]]
 +modId = "minecraft"
 +type = "required"
@@ -1004,10 +1012,10 @@ index 00000000..c98ae3d9
 +
 diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 5852f9a8..00000000
+index c10d8301..00000000
 --- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,38 +0,0 @@
+@@ -1,41 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-client-uncapvd",
@@ -1026,6 +1034,9 @@ index 5852f9a8..00000000
 -  "entrypoints": {
 -    "client": [
 -      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
+-    ],
+-    "sodium:config_api_user": [
+-      "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 -    ]
 -  },
 -
@@ -3160,10 +3171,10 @@ index 66901cf5..bc77cb77 100644
      /**
       * Mirror of {@link SerializedChunk#serialize(ServerWorld, Chunk)}
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
-index b6c94e8b..d8dab4b0 100644
+index d63d7d4a..47b5ec84 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
-@@ -22,6 +22,8 @@ import net.minecraft.world.chunk.SerializedChunk;
+@@ -23,6 +23,8 @@ import net.minecraft.world.chunk.SerializedChunk;
  import net.minecraft.world.poi.PointOfInterestStorage;
  import net.minecraft.world.storage.StorageKey;
  import net.minecraft.world.storage.VersionedChunkStorage;
@@ -3172,7 +3183,7 @@ index b6c94e8b..d8dab4b0 100644
  import org.jetbrains.annotations.Nullable;
  import org.slf4j.Logger;
  import org.spongepowered.asm.mixin.Final;
-@@ -93,6 +95,7 @@ public abstract class MixinThreadedAnvilChunkStorage extends VersionedChunkStora
+@@ -94,6 +96,7 @@ public abstract class MixinThreadedAnvilChunkStorage extends VersionedChunkStora
  
              this.chunksBeingSavedCount.incrementAndGet();
              SerializedChunk chunkSerializer = SerializedChunk.fromChunk(this.world, chunk);
@@ -3405,7 +3416,7 @@ index b552a8e9..bb3dd184 100644
  
  }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index 14baf657..fe5fdc5d 100644
+index 82ec2a12..51172897 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -2,7 +2,6 @@ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
@@ -3818,7 +3829,7 @@ index 2f384468..c718e14b 100644
 +    }
 +}
 diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
-index 354b65dd..825ffa20 100644
+index f32a10e0..2a0be1a9 100644
 --- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
 +++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
 @@ -4,7 +4,6 @@ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
@@ -4042,7 +4053,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 2964d929..8697f156 100644
+index 6c2554bb..adcc18f3 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4055,12 +4066,12 @@ index 2964d929..8697f156 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.10
- yarn_mappings=1.21.10+build.1
--loader_version=0.17.3
--fabric_version=0.134.0+1.21.9
+ minecraft_version=1.21.11-rc3
+ yarn_mappings=1.21.11-rc3+build.1
+-loader_version=0.18.1
+-fabric_version=0.139.4+1.21.11
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.10.64
++forge_version=21.11.0-alpha.1.21.11-rc3.20251208.212437
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
