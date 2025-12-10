@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 4e3a650d..c841af33 100644
+index 4e3a650d..f9119574 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,19 +25,11 @@ index 4e3a650d..c841af33 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -63,29 +63,35 @@ allprojects {
+@@ -63,29 +63,27 @@ allprojects {
                  includeGroup "com.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-+        maven {
-+            name = "Maven for PR #2815" // https://github.com/neoforged/NeoForge/pull/2815
-+            url = uri("https://prmaven.neoforged.net/NeoForge/pr2815")
-+            content {
-+                includeModule("net.neoforged", "neoforge")
-+                includeModule("net.neoforged", "testframework")
-+            }
-+        }
      }
  }
  
@@ -70,7 +62,7 @@ index 4e3a650d..c841af33 100644
      loom {
          def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
          accessWidenerPath = file
-@@ -99,12 +105,15 @@ configure (allprojects - project(":tests")) {
+@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
                  ideConfigGenerated project.rootProject == project
              }
          }
@@ -87,7 +79,7 @@ index 4e3a650d..c841af33 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -113,6 +122,10 @@ configure (allprojects - project(":tests")) {
+@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
          from rootProject.file("LICENSE")
      }
  
@@ -98,7 +90,7 @@ index 4e3a650d..c841af33 100644
      java {
          withSourcesJar()
      }
-@@ -149,16 +162,16 @@ configure (allprojects - project(":tests")) {
+@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -118,7 +110,7 @@ index 4e3a650d..c841af33 100644
      }
  
      test {
-@@ -189,13 +202,20 @@ dependencies {
+@@ -189,13 +194,20 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -142,7 +134,7 @@ index 4e3a650d..c841af33 100644
  //    include implementation("com.ishland.flowsched:flowsched")
  
      // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -261,20 +281,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+@@ -261,20 +273,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -721,10 +713,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index bbeb127e..ea1fe988 100644
+index bbeb127e..697c3088 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -55,14 +55,15 @@
+@@ -55,14 +55,14 @@
      "access.IXoroshiro128PlusPlusRandom",
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
@@ -740,8 +732,7 @@ index bbeb127e..ea1fe988 100644
 +    "theinterface.MixinStorageIoWorker"
 +  ],
 +  "client": [
-+    "network.MixinClientCommonNetworkHandler",
-+    "client_movement.MixinClientPlayerEntity"
++    "network.MixinClientCommonNetworkHandler"
    ]
  }
 diff --git a/c2me-base/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
@@ -1012,10 +1003,10 @@ index 00000000..2289abcf
 +
 diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index c10d8301..00000000
+index 31fbf1a1..00000000
 --- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,41 +0,0 @@
+@@ -1,40 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-client-uncapvd",
@@ -1036,7 +1027,6 @@ index c10d8301..00000000
 -      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
 -    ],
 -    "sodium:config_api_user": [
--      "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 -    ]
 -  },
 -
@@ -4053,7 +4043,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 6c2554bb..adcc18f3 100644
+index afda7c36..40badc45 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4066,12 +4056,12 @@ index 6c2554bb..adcc18f3 100644
 +loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.11-rc3
- yarn_mappings=1.21.11-rc3+build.1
+ minecraft_version=1.21.11
+ yarn_mappings=1.21.11+build.1
 -loader_version=0.18.1
 -fabric_version=0.139.4+1.21.11
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.11.0-alpha.1.21.11-rc3.20251208.212437
++forge_version=21.11.0-beta
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
@@ -4269,7 +4259,7 @@ index ebea928f..00000000
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 34592626..e8847e9c 100644
+index 8cba3858..a80220b7 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
 @@ -1,11 +1,11 @@
