@@ -793,29 +793,34 @@ index 8feffc9a..00000000
 -  }
 -}
 diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
-index fe9764c0..8944e190 100644
+index 8c08843d..4d12e43b 100644
 --- a/c2me-client-uncapvd/build.gradle
 +++ b/c2me-client-uncapvd/build.gradle
-@@ -2,6 +2,13 @@ moduleDependencies(project, [
+@@ -2,11 +2,14 @@ moduleDependencies(project, [
          "c2me-base",
  ])
  
+-repositories {
+-    maven {
+-        name = "CaffeineMC snapshots"
+-        url = "https://maven.caffeinemc.net/snapshots"
 +jar {
 +    manifest {
 +        attributes([
 +                "MixinConfigs": "c2me-client-uncapvd.mixins.json"
 +        ])
-+    }
+     }
 +}
- repositories {
++repositories {
      maven {
-         name = "CaffeineMC"
-@@ -10,6 +17,6 @@ repositories {
+         name = "CaffeineMC releases"
+         url = "https://maven.caffeinemc.net/releases"
+@@ -14,6 +17,6 @@ repositories {
  }
  
  dependencies {
--    modImplementation "net.caffeinemc:sodium-fabric-api:0.7.3-SNAPSHOT+mc1.21.10-build.778"
-+    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.0-SNAPSHOT+mc1.21.11-rc3-build.795"
+-    modImplementation "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
++    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.2+mc1.21.11"
  }
  
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
@@ -1003,10 +1008,10 @@ index 00000000..2289abcf
 +
 diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 31fbf1a1..00000000
+index c10d8301..00000000
 --- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,40 +0,0 @@
+@@ -1,41 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-client-uncapvd",
@@ -1027,6 +1032,7 @@ index 31fbf1a1..00000000
 -      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
 -    ],
 -    "sodium:config_api_user": [
+-      "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 -    ]
 -  },
 -
@@ -3518,7 +3524,7 @@ index 56b2f567..01b3b3e7 100644
                                  );
                              } finally {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 30cda2ec..3e276ba0 100644
+index 33ac464e..2537ad5d 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,7 +1,6 @@
@@ -3529,25 +3535,24 @@ index 30cda2ec..3e276ba0 100644
  import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
-@@ -62,14 +61,10 @@ public class ServerAccessible extends NewChunkStatus {
-                             worldChunk.setLoadedToWorld(true);
-                             worldChunk.updateAllBlockEntities();
-                             worldChunk.addChunkTickSchedulers(serverWorld);
--                            if (ModStatuses.fabric_lifecycle_events_v1) {
--                                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
--                            }
--                        }
-+                            LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
-+                }
+@@ -80,14 +79,10 @@ public class ServerAccessible extends NewChunkStatus {
+                 worldChunk.setLoadedToWorld(true);
+                 worldChunk.updateAllBlockEntities();
+                 worldChunk.addChunkTickSchedulers(serverWorld);
+-                if (ModStatuses.fabric_lifecycle_events_v1) {
+-                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
+-                }
++                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
+             }
  
--                        if (ModStatuses.fabric_lifecycle_events_v1) {
--                            LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
--                        }
-+                        LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
+-            if (ModStatuses.fabric_lifecycle_events_v1) {
+-                LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
+-            }
++            LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
  
-                         ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
-                         ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
-@@ -120,9 +115,7 @@ public class ServerAccessible extends NewChunkStatus {
+             ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+             ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+@@ -136,9 +131,7 @@ public class ServerAccessible extends NewChunkStatus {
                          final WorldChunk worldChunk = (WorldChunk) chunk;
                          ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
  
@@ -4043,7 +4048,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index afda7c36..40badc45 100644
+index 91f5f977..5ae43094 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -4065,7 +4070,7 @@ index afda7c36..40badc45 100644
 +# https://github.com/architectury/architectury-loom/issues/230
 +yarn_mappings_patch_neoforge_version=1.21+build.4
  # Mod Properties
- mod_version=0.3.6+alpha.0
+ mod_version=0.3.7+alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge

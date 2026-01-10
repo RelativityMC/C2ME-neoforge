@@ -50,7 +50,7 @@ index fd192de0..4fdbedbc 100644
  
      @Override
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index fe5fdc5d..c306cce2 100644
+index 51172897..89498a6e 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -80,7 +80,7 @@ public class ReadFromDisk extends NewChunkStatus {
@@ -72,42 +72,31 @@ index fe5fdc5d..c306cce2 100644
                          return asyncSaveFuture;
                      }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 3e276ba0..06b0d269 100644
+index 2537ad5d..b2f077d9 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-@@ -6,6 +6,7 @@ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
- import com.ishland.c2me.base.mixin.access.IWorldChunk;
- import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
- import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
-+import com.ishland.c2me.rewrites.chunksystem.common.Config;
- import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
- import com.ishland.c2me.rewrites.chunksystem.common.compat.lithium.LithiumChunkStatusTrackerInvoker;
- import com.ishland.c2me.rewrites.chunksystem.common.ducks.WorldChunkExtension;
-@@ -55,19 +56,10 @@ public class ServerAccessible extends NewChunkStatus {
-                         worldChunk.setLevelTypeProvider(context.holder().getUserData().get()::getLevelType);
-                         worldChunk.setUnsavedListener(((IThreadedAnvilChunkStorage) context.tacs()).getGenerationContext().unsavedListener());
-                         ((WorldChunkExtension) worldChunk).c2me$setBlockTicking(false); // not necessary, but just in case
--                        context.holder().getItem().set(new ChunkState(worldChunk, new WrapperProtoChunk(worldChunk, false), ChunkStatus.FULL));
--                        if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
--                            worldChunk.loadEntities();
--                            worldChunk.setLoadedToWorld(true);
--                            worldChunk.updateAllBlockEntities();
--                            worldChunk.addChunkTickSchedulers(serverWorld);
--                            LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
--                }
+@@ -73,25 +73,39 @@ public class ServerAccessible extends NewChunkStatus {
+             worldChunk.setLevelTypeProvider(context.holder().getUserData().get()::getLevelType);
+             worldChunk.setUnsavedListener(((IThreadedAnvilChunkStorage) context.tacs()).getGenerationContext().unsavedListener());
+             ((WorldChunkExtension) worldChunk).c2me$setBlockTicking(false); // not necessary, but just in case
+-            context.holder().getItem().set(new ChunkState(worldChunk, newProtoChunk, ChunkStatus.FULL));
+-            if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
+-                worldChunk.loadEntities();
+-                worldChunk.setLoadedToWorld(true);
+-                worldChunk.updateAllBlockEntities();
+-                worldChunk.addChunkTickSchedulers(serverWorld);
+-                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
++            context.holder().getItem().set(new ChunkState(worldChunk, newProtoChunk, ChunkStatus.FULL, protoChunk instanceof WrapperProtoChunk));
++            if (!Config.delayFullChunkEvents) {
++                invokeFullChunkEvents(context, worldChunk, serverWorld, protoChunk instanceof WrapperProtoChunk);
+             }
 -
--                        LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
+-            LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
 -
--                        ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
--                        ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
-+                        context.holder().getItem().set(new ChunkState(worldChunk, new WrapperProtoChunk(worldChunk, false), ChunkStatus.FULL, protoChunk instanceof WrapperProtoChunk));
-+                        if (!Config.delayFullChunkEvents) {
-+                            invokeFullChunkEvents(context, worldChunk, serverWorld, protoChunk instanceof WrapperProtoChunk);
-+                        }
-                     }
-                 })
-                 .subscribeOn(Schedulers.from(((IThreadedAnvilChunkStorage) context.tacs()).getMainThreadExecutor()));
-@@ -75,7 +67,31 @@ public class ServerAccessible extends NewChunkStatus {
+-            ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+-            ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+         }
+     }
  
      @Override
      public Completable postUpgradeToThis(ChunkLoadingContext context) {
@@ -132,7 +121,6 @@ index 3e276ba0..06b0d269 100644
 +            LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !wasFullChunk);
 +        }
 +
-+
 +        LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
 +
 +        ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
@@ -140,7 +128,7 @@ index 3e276ba0..06b0d269 100644
      }
  
      private static WorldChunk toFullChunk(ProtoChunk protoChunk, ServerWorld serverWorld) {
-@@ -121,7 +137,7 @@ public class ServerAccessible extends NewChunkStatus {
+@@ -137,7 +151,7 @@ public class ServerAccessible extends NewChunkStatus {
                          worldChunk.setLevelTypeProvider(null);
                          worldChunk.setUnsavedListener(pos -> {
                          });
