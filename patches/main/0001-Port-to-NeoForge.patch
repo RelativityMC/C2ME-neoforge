@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 63a91cab..326df40e 100644
+index 63a91cab..84529b81 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
@@ -25,19 +25,11 @@ index 63a91cab..326df40e 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -65,29 +65,35 @@ allprojects {
+@@ -65,29 +65,27 @@ allprojects {
                  includeGroup "com.github.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-+        maven {
-+            name = "Maven for PR #2879" // https://github.com/neoforged/NeoForge/pull/2879
-+            url = uri("https://prmaven.neoforged.net/NeoForge/pr2879")
-+            content {
-+                includeModule("net.neoforged", "neoforge")
-+                includeModule("net.neoforged", "testframework")
-+            }
-+        }
      }
  }
  
@@ -70,7 +62,7 @@ index 63a91cab..326df40e 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -113,7 +119,7 @@ configure (allprojects - project(":tests")) {
+@@ -113,7 +111,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -79,7 +71,7 @@ index 63a91cab..326df40e 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -158,16 +164,16 @@ configure (allprojects - project(":tests")) {
+@@ -158,16 +156,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -99,7 +91,7 @@ index 63a91cab..326df40e 100644
      }
  
      test {
-@@ -197,11 +203,12 @@ dependencies {
+@@ -197,11 +195,12 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -115,7 +107,7 @@ index 63a91cab..326df40e 100644
      include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
      include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
  //    include implementation("com.ishland.flowsched:flowsched")
-@@ -268,20 +275,19 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
+@@ -268,20 +267,19 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -774,7 +766,7 @@ index 8feffc9a..00000000
 -  }
 -}
 diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
-index 75135619..f33b9277 100644
+index b8d867b3..e1f72a97 100644
 --- a/c2me-client-uncapvd/build.gradle
 +++ b/c2me-client-uncapvd/build.gradle
 @@ -2,11 +2,14 @@ moduleDependencies(project, [
@@ -800,8 +792,8 @@ index 75135619..f33b9277 100644
  }
  
  dependencies {
--//    modImplementation "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
-+//    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.2+mc1.21.11"
+-    modImplementation "net.caffeinemc:sodium-fabric-api:0.8.7+mc26.1"
++    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.7+mc26.1"
  }
  
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
@@ -989,10 +981,10 @@ index 00000000..2289abcf
 +
 diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 31fbf1a1..00000000
+index c10d8301..00000000
 --- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,40 +0,0 @@
+@@ -1,41 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-client-uncapvd",
@@ -1013,6 +1005,7 @@ index 31fbf1a1..00000000
 -      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
 -    ],
 -    "sodium:config_api_user": [
+-      "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 -    ]
 -  },
 -
@@ -3560,7 +3553,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 07f414af..b53290a9 100644
+index c78c4986..613bfbfb 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,22 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -3572,12 +3565,12 @@ index 07f414af..b53290a9 100644
 +
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.1-rc-3
- yarn_mappings=26.1-rc-3+build.1
+ minecraft_version=26.1
+ yarn_mappings=26.1+build.1
 -loader_version=0.18.4
 -fabric_version=0.143.7+26.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.1.0.0-alpha.0+rc-3.20260323.142228
++forge_version=26.1.0.1-beta
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.3.7+alpha.0

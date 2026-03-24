@@ -5,10 +5,10 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 326df40e..59e32d36 100644
+index 84529b81..fdc94994 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -221,13 +221,13 @@ dependencies {
+@@ -213,13 +213,13 @@ dependencies {
  apply plugin: 'com.modrinth.minotaur'
  modrinth {
      token = System.getenv("MODRINTH_TOKEN") // This is the default. Remember to have the MODRINTH_TOKEN environment variable set or else this will fail, or set it to whatever you want - just make sure it stays private!
@@ -24,7 +24,7 @@ index 326df40e..59e32d36 100644
      changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
  }
  
-@@ -245,7 +245,7 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
+@@ -237,7 +237,7 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
                  }
  
                  gameVersion("minecraft-" + matcher.group(1) + "-" + matcher.group(2), project.minecraft_version.replace('.', '-'))
