@@ -5,14 +5,14 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 4e3a650d..f9119574 100644
+index 63a91cab..326df40e 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
  plugins {
      id 'java-library'
--    id 'fabric-loom' version '1.13-SNAPSHOT' apply false
-+    id 'dev.architectury.loom' version '1.13-SNAPSHOT' apply false
+-    id 'net.fabricmc.fabric-loom-remap' version '1.15-SNAPSHOT' apply false
++    id 'org.relativitymc.neo-loom-remap' version '1.15-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
      id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
@@ -21,15 +21,23 @@ index 4e3a650d..f9119574 100644
  
      afterEvaluate {
 -        if (it.plugins.hasPlugin("fabric-loom")) {
-+        if (it.plugins.hasPlugin("dev.architectury.loom")) {
++        if (it.plugins.hasPlugin("org.relativitymc.neo-loom-remap")) {
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -63,29 +63,27 @@ allprojects {
-                 includeGroup "com.bawnorton.mixinsquared"
+@@ -65,29 +65,35 @@ allprojects {
+                 includeGroup "com.github.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
++        maven {
++            name = "Maven for PR #2879" // https://github.com/neoforged/NeoForge/pull/2879
++            url = uri("https://prmaven.neoforged.net/NeoForge/pr2879")
++            content {
++                includeModule("net.neoforged", "neoforge")
++                includeModule("net.neoforged", "testframework")
++            }
++        }
      }
  }
  
@@ -37,13 +45,13 @@ index 4e3a650d..f9119574 100644
      if (project != project(":") && project.parent != project(":")) return
  
 -    apply plugin: 'fabric-loom'
-+    apply plugin: 'dev.architectury.loom'
++    apply plugin: 'org.relativitymc.neo-loom-remap'
      apply plugin: 'maven-publish'
  
      dependencies {
          //to change the versions see the gradle.properties file
          minecraft "com.mojang:minecraft:${project.minecraft_version}"
--        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+-        mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
 -        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 -
 -        [
@@ -52,25 +60,17 @@ index 4e3a650d..f9119574 100644
 -        ].forEach {
 -            modCompileOnly(fabricApi.module(it, "${project.fabric_version}"))
 +        mappings loom.layered {
-+            it.mappings("net.fabricmc:yarn:$project.yarn_mappings:v2")
-+            it.mappings("dev.architectury:yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
++            it.mappings("org.relativitymc:modern-yarn:$project.yarn_mappings:v2")
++            it.mappings("org.relativitymc:modern-yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
          }
 +        neoForge "net.neoforged:neoforge:${project.forge_version}"
      }
  
 +
-     loom {
-         def file = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
-         accessWidenerPath = file
-@@ -99,12 +97,15 @@ configure (allprojects - project(":tests")) {
-                 ideConfigGenerated project.rootProject == project
-             }
-         }
-+        mixin {
-+            useLegacyMixinAp = true
-+        }
+     remapJar {
+         addNestedDependencies = true
      }
- 
+@@ -113,7 +119,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -79,18 +79,7 @@ index 4e3a650d..f9119574 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -113,6 +114,10 @@ configure (allprojects - project(":tests")) {
-         from rootProject.file("LICENSE")
-     }
- 
-+    remapJar {
-+        useMixinAP = true
-+    }
-+
-     java {
-         withSourcesJar()
-     }
-@@ -149,16 +154,16 @@ configure (allprojects - project(":tests")) {
+@@ -158,16 +164,16 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -110,31 +99,23 @@ index 4e3a650d..f9119574 100644
      }
  
      test {
-@@ -189,13 +194,20 @@ dependencies {
+@@ -197,11 +203,12 @@ dependencies {
  //    includeApi project(":libs")
  //    include project(":libs")
      include implementation("com.ibm.async:asyncutil:${async_util_version}")
 -    include implementation("com.electronwill.night-config:toml:${night_config_version}")
 -    include implementation("com.electronwill.night-config:core:${night_config_version}")
-+    forgeRuntimeLibrary("com.ibm.async:asyncutil:${async_util_version}")
 +//    include implementation("com.electronwill.night-config:toml:${night_config_version}")
 +//    include implementation("com.electronwill.night-config:core:${night_config_version}")
      include implementation("net.objecthunter:exp4j:${exp4j_version}")
-+    forgeRuntimeLibrary("net.objecthunter:exp4j:${exp4j_version}")
      include implementation("org.jctools:jctools-core:${jctools_version}")
 -    include implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-fabric:${mixinsquared_version}"))
-+    forgeRuntimeLibrary("org.jctools:jctools-core:${jctools_version}")
 +    compileOnly annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-common:${mixinsquared_version}")
 +    include implementation("com.github.bawnorton.mixinsquared:mixinsquared-neoforge:${mixinsquared_version}")
      include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
-+    forgeRuntimeLibrary "io.reactivex.rxjava3:rxjava:${rxjava_version}"
      include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
-+    forgeRuntimeLibrary "org.reactivestreams:reactive-streams:${reactive_streams_version}"
-+    forgeRuntimeLibrary("com.ishland.flowsched:flowsched")
  //    include implementation("com.ishland.flowsched:flowsched")
- 
-     // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
-@@ -261,20 +273,19 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+@@ -268,20 +275,19 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -422,7 +403,7 @@ index 00000000..c9a0e7c0
 +    }
 +}
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
-index 39f4423e..ac286810 100644
+index aa535907..ac286810 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/network/ExtRenderDistance.java
 @@ -1,23 +1,40 @@
@@ -449,8 +430,8 @@ index 39f4423e..ac286810 100644
      public static final Id<ExtRenderDistance> ID = new Id<>(Identifier.of(C2MEConstants.MODID, C2MEConstants.EXT_RENDER_DISTANCE_ID));
  
 -    static {
--        PayloadTypeRegistry.configurationC2S().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
--        PayloadTypeRegistry.playC2S().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
+-        PayloadTypeRegistry.serverboundConfiguration().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
+-        PayloadTypeRegistry.serverboundPlay().register(ExtRenderDistance.ID, ExtRenderDistance.CODEC);
 +    public static void register(final RegisterPayloadHandlersEvent event) {
 +        if (registered.compareAndSet(false, true)) {
 +            event.registrar("1").optional().playToServer(
@@ -713,10 +694,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index bbeb127e..697c3088 100644
+index 3ff83f34..a19d6ab7 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -55,14 +55,14 @@
+@@ -56,14 +56,14 @@
      "access.IXoroshiro128PlusPlusRandom",
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
@@ -793,7 +774,7 @@ index 8feffc9a..00000000
 -  }
 -}
 diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
-index 8c08843d..4d12e43b 100644
+index 75135619..f33b9277 100644
 --- a/c2me-client-uncapvd/build.gradle
 +++ b/c2me-client-uncapvd/build.gradle
 @@ -2,11 +2,14 @@ moduleDependencies(project, [
@@ -819,12 +800,12 @@ index 8c08843d..4d12e43b 100644
  }
  
  dependencies {
--    modImplementation "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
-+    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.2+mc1.21.11"
+-//    modImplementation "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
++//    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.2+mc1.21.11"
  }
  
 diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
-index 46a7897a..195feb72 100644
+index 680f58b5..195feb72 100644
 --- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 +++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/ClientExtNetworking.java
 @@ -1,10 +1,15 @@
@@ -832,9 +813,9 @@ index 46a7897a..195feb72 100644
  
 +import com.ishland.c2me.base.common.network.ClientChannelRegisterPayloadEvent;
  import com.ishland.c2me.base.common.network.ExtRenderDistance;
--import net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents;
 -import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworking;
 -import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+-import net.fabricmc.fabric.api.client.networking.v1.ServerboundPlayChannelEvents;
  import net.minecraft.client.MinecraftClient;
 +import net.minecraft.client.network.ClientPlayNetworkHandler;
 +import net.minecraft.network.NetworkPhase;
@@ -880,7 +861,7 @@ index 46a7897a..195feb72 100644
  
 -    public static void registerListeners() {
 -        ExtRenderDistance.init();
--        C2SPlayChannelEvents.REGISTER.register((handler, sender, client, channels) -> {
+-        ServerboundPlayChannelEvents.REGISTER.register((handler, sender, client, channels) -> {
 -            if (channels.contains(ExtRenderDistance.ID.id())) {
 +    public static void registerListeners(final RegisterPayloadHandlersEvent event) {
 +        ExtRenderDistance.register(event);
@@ -1008,10 +989,10 @@ index 00000000..2289abcf
 +
 diff --git a/c2me-client-uncapvd/src/main/resources/fabric.mod.json b/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index c10d8301..00000000
+index 31fbf1a1..00000000
 --- a/c2me-client-uncapvd/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,41 +0,0 @@
+@@ -1,40 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-client-uncapvd",
@@ -1032,7 +1013,6 @@ index c10d8301..00000000
 -      "com.ishland.c2me.client.uncapvd.common.UncapVDInitializer"
 -    ],
 -    "sodium:config_api_user": [
--      "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 -    ]
 -  },
 -
@@ -1527,7 +1507,7 @@ index e8383e1e..7f3661a7 100644
 +
  }
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
-index c38cde07..4efea251 100644
+index 7c516c25..4efea251 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/ServerExtNetworking.java
 @@ -1,23 +1,17 @@
@@ -1550,7 +1530,7 @@ index c38cde07..4efea251 100644
 -        ServerConfigurationNetworking.registerGlobalReceiver(
 -                ExtRenderDistance.ID,
 -                (payload, context) ->
--                        ((IRenderDistanceOverride) context.networkHandler()).c2me_notickvd$setRenderDistance(payload.renderDistance())
+-                        ((IRenderDistanceOverride) context.packetListener()).c2me_notickvd$setRenderDistance(payload.renderDistance())
 -        );
 +    public static void registerListeners(RegisterPayloadHandlersEvent event) {
 +        ExtRenderDistance.register(event);
@@ -1757,7 +1737,7 @@ index 7bc073ec..4b352fdb 100644
          return true;
      }
 diff --git a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
-index 8deb552b..5b2859b7 100644
+index 05f7fbd0..899d45c6 100644
 --- a/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
 +++ b/c2me-opts-allocs/src/main/java/com/ishland/c2me/opts/allocs/mixin/MixinNbtCompound1.java
 @@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -1817,7 +1797,7 @@ index 00000000..e54eab96
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
-index 5514c015..4d1848c1 100644
+index ec44e205..15824695 100644
 --- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 +++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 @@ -5,8 +5,6 @@
@@ -1828,7 +1808,7 @@ index 5514c015..4d1848c1 100644
 -    "MixinNbtCompound1",
      "MixinNbtList",
      "MixinUtil",
-     "object_pooling_caching.MixinConfiguredFeature",
+     "object_pooling_caching.MixinOreFeature",
 diff --git a/c2me-opts-allocs/src/main/resources/fabric.mod.json b/c2me-opts-allocs/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index cb2dcf73..00000000
@@ -2015,482 +1995,6 @@ index 11104c69..8485eb36 100644
 +        ])
 +    }
 +}
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java
-new file mode 100644
-index 00000000..ef1d9039
---- /dev/null
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/InvocationShim.java
-@@ -0,0 +1,35 @@
-+package com.ishland.c2me.opts.dfc.common.ast;
-+
-+import net.minecraft.util.math.MathHelper;
-+import net.minecraft.world.gen.densityfunction.DensityFunction;
-+
-+/**
-+ * All called from generated code
-+ */
-+public class InvocationShim {
-+
-+    public static double invokeDensityFunctionSample(DensityFunction densityFunction, DensityFunction.NoisePos pos) {
-+        return densityFunction.sample(pos);
-+    }
-+
-+    public static void invokeDensityFunctionFill(DensityFunction densityFunction, double[] densities, DensityFunction.EachApplier applier) {
-+        densityFunction.fill(densities, applier);
-+    }
-+
-+    public static double invokeMathHelperClampedMap(double value, double oldStart, double oldEnd, double newStart, double newEnd) {
-+        return MathHelper.clampedMap(value, oldStart, oldEnd, newStart, newEnd);
-+    }
-+
-+    public static double invokeDensityFunctionNoiseSample(DensityFunction.Noise noise, double x, double y, double z) {
-+        return noise.sample(x, y, z);
-+    }
-+
-+    public static float invokeMathHelperLerp(float delta, float start, float end) {
-+        return MathHelper.lerp(delta, start, end);
-+    }
-+
-+    public static int invokeFloor(double value) {
-+        return MathHelper.floor(value);
-+    }
-+
-+}
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
-index 5644d9cd..9a7bbb64 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/DelegateNode.java
-@@ -1,13 +1,13 @@
- package com.ishland.c2me.opts.dfc.common.ast.misc;
- 
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
- import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
- import com.ishland.c2me.opts.dfc.common.vif.EachApplierVanillaInterface;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
- import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import org.objectweb.asm.Label;
- import org.objectweb.asm.Type;
-@@ -62,10 +62,11 @@ public class DelegateNode implements AstNode {
-         m.load(3, Type.INT_TYPE);
-         m.load(4, InstructionAdapter.OBJECT_TYPE);
-         m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
--        m.invokeinterface(
--                Type.getInternalName(DensityFunction.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40464", "(Lnet/minecraft/class_6910$class_6912;)D"),
--                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.NoisePos.class))
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
-+                false
-         );
-         m.areturn(Type.DOUBLE_TYPE);
-     }
-@@ -99,10 +100,11 @@ public class DelegateNode implements AstNode {
-         m.aload(Type.INT_TYPE);
-         m.load(5, InstructionAdapter.OBJECT_TYPE);
-         m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
--        m.invokeinterface(
--                Type.getInternalName(DensityFunction.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40464", "(Lnet/minecraft/class_6910$class_6912;)D"),
--                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.NoisePos.class))
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
-+                false
-         );
- 
-         m.astore(Type.DOUBLE_TYPE);
-@@ -121,10 +123,11 @@ public class DelegateNode implements AstNode {
-         m.load(5, InstructionAdapter.OBJECT_TYPE);
-         m.load(6, InstructionAdapter.OBJECT_TYPE);
-         m.invokespecial(Type.getInternalName(EachApplierVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(int[].class), Type.getType(int[].class), Type.getType(int[].class), Type.getType(EvalType.class), Type.getType(ArrayCache.class)), false);
--        m.invokeinterface(
--                Type.getInternalName(DensityFunction.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40470", "([DLnet/minecraft/class_6910$class_6911;)V"),
--                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class))
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionFill",
-+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(DensityFunction.class), Type.getType(double[].class), Type.getType(DensityFunction.EachApplier.class)),
-+                false
-         );
-         m.areturn(Type.VOID_TYPE);
-     }
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/FindTopSurfaceNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/FindTopSurfaceNode.java
-index f1fbf620..61731c8f 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/FindTopSurfaceNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/FindTopSurfaceNode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.misc;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.util.math.MathHelper;
- import org.objectweb.asm.Label;
- import org.objectweb.asm.Type;
-@@ -90,8 +90,8 @@ public class FindTopSurfaceNode implements AstNode {
-         m.dconst(this.cellHeight);
-         m.div(Type.DOUBLE_TYPE);
-         m.invokestatic(
--                Type.getInternalName(MathHelper.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_15357", "(D)I"),
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeFloor",
-                 "(D)I",
-                 false
-         );
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
-index 997e027e..967bb381 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/misc/YClampedGradientNode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.misc;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.util.math.MathHelper;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -56,8 +56,8 @@ public class YClampedGradientNode implements AstNode {
-         m.dconst(this.fromValue);
-         m.dconst(this.toValue);
-         m.invokestatic(
--                Type.getInternalName(MathHelper.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_32854", "(DDDDD)D"),
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeMathHelperClampedMap",
-                 "(DDDDD)D",
-                 false
-         );
-@@ -80,8 +80,8 @@ public class YClampedGradientNode implements AstNode {
-                 m.dconst(this.fromValue);
-                 m.dconst(this.toValue);
-                 m.invokestatic(
--                        Type.getInternalName(MathHelper.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_32854", "(DDDDD)D"),
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeMathHelperClampedMap",
-                         "(DDDDD)D",
-                         false
-                 );
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
-index 98078817..b027e032 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTNoiseNode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -67,10 +67,10 @@ public class DFTNoiseNode implements AstNode {
-         m.dconst(this.xzScale);
-         m.mul(Type.DOUBLE_TYPE);
- 
--        m.invokevirtual(
--                Type.getInternalName(DensityFunction.Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.areturn(Type.DOUBLE_TYPE);
-@@ -109,10 +109,10 @@ public class DFTNoiseNode implements AstNode {
-                 m.dconst(this.xzScale);
-                 m.mul(Type.DOUBLE_TYPE);
- 
--                m.invokevirtual(
--                        Type.getInternalName(DensityFunction.Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-             }
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
-index c47c3e5f..d26a08a4 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftANode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -60,10 +60,10 @@ public class DFTShiftANode implements AstNode {
-         m.dconst(0.25);
-         m.mul(Type.DOUBLE_TYPE);
- 
--        m.invokevirtual(
--                Type.getInternalName(DensityFunction.Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.dconst(4.0);
-@@ -99,10 +99,10 @@ public class DFTShiftANode implements AstNode {
-                 m.dconst(0.25);
-                 m.mul(Type.DOUBLE_TYPE);
- 
--                m.invokevirtual(
--                        Type.getInternalName(DensityFunction.Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-                 m.dconst(4.0);
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
-index 2fd85b5c..47bc5a9a 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftBNode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -60,10 +60,10 @@ public class DFTShiftBNode implements AstNode {
- 
-         m.dconst(0.0);
- 
--        m.invokevirtual(
--                Type.getInternalName(DensityFunction.Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.dconst(4.0);
-@@ -99,10 +99,10 @@ public class DFTShiftBNode implements AstNode {
- 
-                 m.dconst(0.0);
- 
--                m.invokevirtual(
--                        Type.getInternalName(DensityFunction.Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-                 m.dconst(4.0);
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
-index 0441375e..8f1f58d7 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTShiftNode.java
-@@ -3,8 +3,8 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -63,10 +63,10 @@ public class DFTShiftNode implements AstNode {
-         m.dconst(0.25);
-         m.mul(Type.DOUBLE_TYPE);
- 
--        m.invokevirtual(
--                Type.getInternalName(DensityFunction.Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.dconst(4.0);
-@@ -107,10 +107,10 @@ public class DFTShiftNode implements AstNode {
-                 m.dconst(0.25);
-                 m.mul(Type.DOUBLE_TYPE);
- 
--                m.invokevirtual(
--                        Type.getInternalName(DensityFunction.Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-                 m.dconst(4.0);
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
-index 554a1a28..1b80bca5 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/DFTWeirdScaledSamplerNode.java
-@@ -5,8 +5,8 @@ import com.ishland.c2me.base.mixin.access.IDensityFunctionsCaveScaler;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.world.gen.densityfunction.DensityFunction;
- import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
- import org.objectweb.asm.Type;
-@@ -101,10 +101,10 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
-         m.load(scale, Type.DOUBLE_TYPE);
-         m.div(Type.DOUBLE_TYPE);
- 
--        m.invokevirtual(
--                Type.getInternalName(DensityFunction.Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.invokestatic(
-@@ -177,10 +177,10 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
-                 m.load(scale, Type.DOUBLE_TYPE);
-                 m.div(Type.DOUBLE_TYPE);
- 
--                m.invokevirtual(
--                        Type.getInternalName(DensityFunction.Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-                 m.invokestatic(
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
-index 8e213701..e9d1ac60 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/noise/ShiftedNoiseNode.java
-@@ -3,9 +3,10 @@ package com.ishland.c2me.opts.dfc.common.ast.noise;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
- import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
--import net.fabricmc.loader.api.FabricLoader;
-+import net.minecraft.world.gen.densityfunction.DensityFunction;
- import net.minecraft.world.gen.densityfunction.DensityFunction.Noise;
- import org.objectweb.asm.Type;
- import org.objectweb.asm.commons.InstructionAdapter;
-@@ -104,10 +105,10 @@ public class ShiftedNoiseNode implements AstNode {
-         context.callDelegateSingle(m, shiftZMethod);
-         m.add(Type.DOUBLE_TYPE);
- 
--        m.invokevirtual(
--                Type.getInternalName(Noise.class),
--                FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                "(DDD)D",
-+        m.invokestatic(
-+                Type.getInternalName(InvocationShim.class),
-+                "invokeDensityFunctionNoiseSample",
-+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                 false
-         );
-         m.areturn(Type.DOUBLE_TYPE);
-@@ -199,10 +200,10 @@ public class ShiftedNoiseNode implements AstNode {
-                 m.aload(Type.DOUBLE_TYPE);
-                 m.add(Type.DOUBLE_TYPE);
- 
--                m.invokevirtual(
--                        Type.getInternalName(Noise.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910$class_7270", "method_42356", "(DDD)D"),
--                        "(DDD)D",
-+                m.invokestatic(
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeDensityFunctionNoiseSample",
-+                        Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.Noise.class), Type.DOUBLE_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE),
-                         false
-                 );
-             }
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
-index d3ed9c2c..88c485cf 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/spline/SplineAstNode.java
-@@ -3,13 +3,13 @@ package com.ishland.c2me.opts.dfc.common.ast.spline;
- import com.ishland.c2me.opts.dfc.common.ast.AstNode;
- import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
- import com.ishland.c2me.opts.dfc.common.ast.EvalType;
-+import com.ishland.c2me.opts.dfc.common.ast.InvocationShim;
- import com.ishland.c2me.opts.dfc.common.ast.McToAst;
- import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
- import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
- import com.ishland.flowsched.util.Assertions;
- import it.unimi.dsi.fastutil.Pair;
- import it.unimi.dsi.fastutil.ints.IntObjectPair;
--import net.fabricmc.loader.api.FabricLoader;
- import net.minecraft.util.math.MathHelper;
- import net.minecraft.util.math.Spline;
- import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
-@@ -351,8 +351,8 @@ public class SplineAstNode implements AstNode {
-                 m.load(n, Type.FLOAT_TYPE);
-                 m.load(o, Type.FLOAT_TYPE);
-                 m.invokestatic(
--                        Type.getInternalName(MathHelper.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_16439", "(FFF)F"),
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeMathHelperLerp",
-                         "(FFF)F",
-                         false
-                 );
-@@ -365,8 +365,8 @@ public class SplineAstNode implements AstNode {
-                 m.load(p, Type.FLOAT_TYPE);
-                 m.load(q, Type.FLOAT_TYPE);
-                 m.invokestatic(
--                        Type.getInternalName(MathHelper.class),
--                        FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_3532", "method_16439", "(FFF)F"),
-+                        Type.getInternalName(InvocationShim.class),
-+                        "invokeMathHelperLerp",
-                         "(FFF)F",
-                         false
-                 );
 diff --git a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..aa7ae047
@@ -2663,24 +2167,25 @@ index 9889ea15..00000000
 -  }
 -}
 diff --git a/c2me-opts-natives-math/build.gradle b/c2me-opts-natives-math/build.gradle
-index 4f3484aa..50857608 100644
+index 4f3484aa..2cf71556 100644
 --- a/c2me-opts-natives-math/build.gradle
 +++ b/c2me-opts-natives-math/build.gradle
-@@ -4,6 +4,14 @@ moduleDependencies(project, [
+@@ -4,9 +4,12 @@ moduleDependencies(project, [
          "c2me-base",
  ])
  
+-java {
+-    sourceCompatibility = JavaVersion.VERSION_22
+-    targetCompatibility = JavaVersion.VERSION_22
 +jar {
 +    manifest {
 +        attributes([
 +                "MixinConfigs": "c2me-opts-natives-math.mixins.json"
 +        ])
 +    }
-+}
-+
- java {
-     sourceCompatibility = JavaVersion.VERSION_22
-     targetCompatibility = JavaVersion.VERSION_22
+ }
+ 
+ def addTarget(String target, String outputName) {
 diff --git a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..bd468fa7
@@ -2722,10 +2227,10 @@ index 00000000..bd468fa7
 +side = "BOTH"
 diff --git a/c2me-opts-natives-math/src/main/resources/fabric.mod.json b/c2me-opts-natives-math/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index b90edb5c..00000000
+index 0fa5e026..00000000
 --- a/c2me-opts-natives-math/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,34 +0,0 @@
+@@ -1,33 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-opts-natives-math",
@@ -2737,7 +2242,6 @@ index b90edb5c..00000000
 -    "c2me-opts-natives-math.mixins.json"
 -  ],
 -  "depends": {
--    "java": ">=22",
 -    "minecraft": "*",
 -    "fabricloader": "*",
 -    "c2me-base": "*"
@@ -3146,7 +2650,7 @@ index 8edcbf63..1c783171 100644
 +
  }
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
-index 66901cf5..bc77cb77 100644
+index 12558814..1cc350db 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
 @@ -7,7 +7,6 @@ import com.ishland.c2me.base.mixin.access.IStructureStart;
@@ -3167,7 +2671,7 @@ index 66901cf5..bc77cb77 100644
      /**
       * Mirror of {@link SerializedChunk#serialize(ServerWorld, Chunk)}
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
-index d63d7d4a..47b5ec84 100644
+index 279ed2cf..5745200b 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/mixin/MixinThreadedAnvilChunkStorage.java
 @@ -23,6 +23,8 @@ import net.minecraft.world.chunk.SerializedChunk;
@@ -3338,7 +2842,7 @@ index e6a1c51e..7f3ded5d 100644
          if (MH_onChunkInaccessible != null) {
              try {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-index b552a8e9..bb3dd184 100644
+index ded4bfe1..bb3dd184 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 @@ -1,10 +1,10 @@
@@ -3358,7 +2862,7 @@ index b552a8e9..bb3dd184 100644
  
      public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
          try {
--            ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(world, chunk);
+-            ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(world, chunk, newChunk);
 -            if (newChunk) {
 -                ServerChunkEvents.CHUNK_GENERATE.invoker().onChunkGenerate(world, chunk);
 -            }
@@ -3381,14 +2885,14 @@ index b552a8e9..bb3dd184 100644
      public static boolean needsInvokeChunkLevelTypeChange() {
 -        if (cachedNeedsInvokeChunkLevelTypeChange) return true;
 -        try {
--            if (ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE instanceof IArrayBackedEvent<?> accessor0) {
--                IArrayBackedEvent<ServerChunkEvents.LevelTypeChange> accessor = (IArrayBackedEvent<ServerChunkEvents.LevelTypeChange>) accessor0;
+-            if (ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE instanceof IArrayBackedEvent<?> accessor0) {
+-                IArrayBackedEvent<ServerChunkEvents.FullChunkStatusChange> accessor = (IArrayBackedEvent<ServerChunkEvents.FullChunkStatusChange>) accessor0;
 -                if (accessor.c2me$getHandlers().length > 0) {
 -                    cachedNeedsInvokeChunkLevelTypeChange = true;
 -                    return true;
 -                }
 -            } else {
--                LOGGER.warn("Unexpected Event implementation of ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE: {}", ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE.getClass().getName());
+-                LOGGER.warn("Unexpected Event implementation of ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE: {}", ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE.getClass().getName());
 -                cachedNeedsInvokeChunkLevelTypeChange = true;
 -                return true;
 -            }
@@ -3403,7 +2907,7 @@ index b552a8e9..bb3dd184 100644
  
      public static void invokeChunkLevelTypeChange(ServerWorld world, WorldChunk chunk, ChunkLevelType oldLevelType, ChunkLevelType newLevelType) {
 -        try {
--            ServerChunkEvents.CHUNK_LEVEL_TYPE_CHANGE.invoker().onChunkLevelTypeChange(world, chunk, oldLevelType, newLevelType);
+-            ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE.invoker().onFullChunkStatusChange(world, chunk, oldLevelType, newLevelType);
 -        } catch (Throwable t) {
 -            LOGGER.error("Failed to invoke chunk level type change event (world={}, pos={}, oldLevelType={}, newLevelType={})", world, chunk.getPos(), oldLevelType, newLevelType, t);
 -        }
@@ -3412,7 +2916,7 @@ index b552a8e9..bb3dd184 100644
  
  }
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
-index 82ec2a12..51172897 100644
+index 6e20782a..38e670e7 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 @@ -2,7 +2,6 @@ package com.ishland.c2me.rewrites.chunksystem.common.statuses;
@@ -3524,7 +3028,7 @@ index 56b2f567..01b3b3e7 100644
                                  );
                              } finally {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 33ac464e..2537ad5d 100644
+index a2d60f3d..204d7bb0 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -1,7 +1,6 @@
@@ -3535,24 +3039,32 @@ index 33ac464e..2537ad5d 100644
  import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
  import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
  import com.ishland.c2me.base.mixin.access.IWorldChunk;
-@@ -80,14 +79,10 @@ public class ServerAccessible extends NewChunkStatus {
-                 worldChunk.setLoadedToWorld(true);
-                 worldChunk.updateAllBlockEntities();
-                 worldChunk.addChunkTickSchedulers(serverWorld);
--                if (ModStatuses.fabric_lifecycle_events_v1) {
--                    LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
--                }
-+                LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !(protoChunk instanceof WrapperProtoChunk));
-             }
+@@ -95,19 +94,15 @@ public class ServerAccessible extends NewChunkStatus {
  
+     private static void invokeFullChunkEvents(ChunkLoadingContext context, WorldChunk worldChunk, boolean wasFullChunk) {
+         ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
+-        if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
+-            worldChunk.loadEntities();
+-            worldChunk.setLoadedToWorld(true);
+-            worldChunk.updateAllBlockEntities();
+-            worldChunk.addChunkTickSchedulers(serverWorld);
 -            if (ModStatuses.fabric_lifecycle_events_v1) {
--                LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
--            }
-+            LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
++            if (!((IWorldChunk) worldChunk).isLoadedToWorld()) {
++                worldChunk.loadEntities();
++                worldChunk.setLoadedToWorld(true);
++                worldChunk.updateAllBlockEntities();
++                worldChunk.addChunkTickSchedulers(serverWorld);
+                 LifecycleEventInvoker.invokeChunkLoaded(serverWorld, worldChunk, !wasFullChunk);
+             }
+-        }
  
-             ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
-             ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
-@@ -136,9 +131,7 @@ public class ServerAccessible extends NewChunkStatus {
+-        if (ModStatuses.fabric_lifecycle_events_v1) {
+             LifecycleEventInvoker.invokeChunkLevelTypeChange(serverWorld, worldChunk, ChunkLevelType.INACCESSIBLE, ChunkLevelType.FULL);
+-        }
+ 
+         ((IThreadedAnvilChunkStorage) context.tacs()).getCurrentChunkHolders().put(context.holder().getKey().toLong(), context.holder().getUserData().get());
+         ((IThreadedAnvilChunkStorage) context.tacs()).setChunkHolderListDirty(true);
+@@ -150,9 +145,7 @@ public class ServerAccessible extends NewChunkStatus {
                          final WorldChunk worldChunk = (WorldChunk) chunk;
                          ServerWorld serverWorld = ((IThreadedAnvilChunkStorage) context.tacs()).getWorld();
  
@@ -4048,27 +3560,25 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 91f5f977..5ae43094 100644
+index 07f414af..b53290a9 100644
 --- a/gradle.properties
 +++ b/gradle.properties
-@@ -8,20 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
+@@ -8,20 +8,22 @@ gradle-curseforge-publish.interop.forge-gradle=false
  gradle-curseforge-publish.interop.neoforged=false
  gradle-curseforge-publish.interop.neogradle=false
  
 -#org.gradle.configuration-cache=true
 +#fabric.loom.multiProjectOptimisation=true
 +
-+loom.platform=neoforge
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=1.21.11
- yarn_mappings=1.21.11+build.1
--loader_version=0.18.1
--fabric_version=0.139.4+1.21.11
+ minecraft_version=26.1-rc-3
+ yarn_mappings=26.1-rc-3+build.1
+-loader_version=0.18.4
+-fabric_version=0.143.7+26.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=21.11.0-beta
-+# https://github.com/architectury/architectury-loom/issues/230
-+yarn_mappings_patch_neoforge_version=1.21+build.4
++forge_version=26.1.0.0-alpha.0+rc-3.20260323.142228
++yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.3.7+alpha.0
  maven_group=com.ishland.c2me
@@ -4082,15 +3592,17 @@ index 91f5f977..5ae43094 100644
  rxjava_version=3.1.12
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 66f6d433..034f80b9 100644
+index 66f6d433..4ac34709 100644
 --- a/settings.gradle
 +++ b/settings.gradle
-@@ -4,13 +4,16 @@ pluginManagement {
+@@ -4,13 +4,18 @@ pluginManagement {
              name = 'Fabric'
              url = 'https://maven.fabricmc.net/'
          }
-+        maven { url = "https://maven.architectury.dev/" }
-+        maven { url = "https://files.minecraftforge.net/maven/" }
++        maven {
++            name = 'RelativityMC'
++            url = 'https://repo.codemc.io/repository/relativitymc/'
++        }
 +        mavenCentral()
          gradlePluginPortal()
      }
@@ -4217,7 +3729,7 @@ index 00000000..61f6c102
 +side = "BOTH"
 diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index ebea928f..00000000
+index bf73b870..00000000
 --- a/src/main/resources/fabric.mod.json
 +++ /dev/null
 @@ -1,42 +0,0 @@
@@ -4249,9 +3761,9 @@ index ebea928f..00000000
 -    ]
 -  },
 -  "depends": {
--    "fabricloader": ">=0.16.14",
--    "java": ">=21",
--    "minecraft": ">=1.21.6-rc.1",
+-    "fabricloader": ">=0.18.3",
+-    "java": ">=25",
+-    "minecraft": ">1.21.11",
 -    "c2me-base": "*"
 -  },
 -  "conflicts": {
@@ -4264,21 +3776,21 @@ index ebea928f..00000000
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 8cba3858..a80220b7 100644
+index 987ffcc6..9d0a951f 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
 @@ -1,11 +1,11 @@
  allprojects {
  //    apply plugin: 'com.ishland.curseforge.modpackresolver'
 -    apply plugin: 'fabric-loom'
-+    apply plugin: 'dev.architectury.loom'
++    apply plugin: 'org.relativitymc.neo-loom-remap'
      apply plugin: 'java-library'
  
      java {
 -        sourceCompatibility = JavaVersion.VERSION_17
 -        targetCompatibility = JavaVersion.VERSION_17
-+        sourceCompatibility = JavaVersion.VERSION_21
-+        targetCompatibility = JavaVersion.VERSION_21
++        sourceCompatibility = JavaVersion.VERSION_25
++        targetCompatibility = JavaVersion.VERSION_25
      }
  
      group = project.maven_group + ".tests"
@@ -4290,19 +3802,19 @@ index 8cba3858..a80220b7 100644
      }
      loom {
          accessWidenerPath = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
-@@ -39,18 +40,17 @@ allprojects {
+@@ -40,18 +41,17 @@ allprojects {
      }
      dependencies {
          minecraft "com.mojang:minecraft:${project.minecraft_version}"
--        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+-        mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
 -        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 -//        modApi 'com.github.astei:lazydfu:0.1.2'
 -//        modApi('com.github.RelativityMC:Starlight:03ab3acd94') {
 -//            transitive = false
 -//        }
 +        mappings loom.layered {
-+            it.mappings("net.fabricmc:yarn:$project.yarn_mappings:v2")
-+            it.mappings("dev.architectury:yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
++            it.mappings("org.relativitymc:modern-yarn:$project.yarn_mappings:v2")
++            it.mappings("org.relativitymc:modern-yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
 +        }
 +        neoForge "net.neoforged:neoforge:${project.forge_version}"
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -4316,10 +3828,10 @@ index 8cba3858..a80220b7 100644
          }
      }
 diff --git a/tests/c2me-test/build.gradle b/tests/c2me-test/build.gradle
-index 655696cf..ea6c304b 100644
+index 58d0765f..6ad47305 100644
 --- a/tests/c2me-test/build.gradle
 +++ b/tests/c2me-test/build.gradle
-@@ -30,6 +30,8 @@ afterEvaluate {
+@@ -46,6 +46,8 @@ afterEvaluate {
      runTestC2MEServer.configure {
          doFirst {
              standardOutput = new RedirectingOutputStream(project, getName())
@@ -4328,7 +3840,7 @@ index 655696cf..ea6c304b 100644
          }
          onlyIf {
              !getRootProject().getProjectDir().toPath().relativize(project.getBuildDir().toPath()).resolve("testServer").toFile().isDirectory()
-@@ -40,8 +42,15 @@ afterEvaluate {
+@@ -56,8 +58,8 @@ afterEvaluate {
  }
  
  dependencies {
@@ -4336,13 +3848,6 @@ index 655696cf..ea6c304b 100644
 -    runtimeOnly project(":").sourceSets.main.output
 +    runtimeOnly project(path: ":tests:test-mod", configuration: "namedElements")
 +    runtimeOnly project(path: ":", configuration: "namedElements")
-+
-+    forgeRuntimeLibrary("com.ibm.async:asyncutil:${async_util_version}")
-+    forgeRuntimeLibrary("net.objecthunter:exp4j:${exp4j_version}")
-+    forgeRuntimeLibrary("org.jctools:jctools-core:${jctools_version}")
-+    forgeRuntimeLibrary("io.reactivex.rxjava3:rxjava:${rxjava_version}")
-+    forgeRuntimeLibrary("org.reactivestreams:reactive-streams:${reactive_streams_version}")
-+    forgeRuntimeLibrary("com.ishland.flowsched:flowsched")
  }
  
  dependencies {

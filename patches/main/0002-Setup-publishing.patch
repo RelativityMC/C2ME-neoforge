@@ -5,16 +5,16 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index f9119574..ba485e3f 100644
+index 326df40e..59e32d36 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -218,13 +218,13 @@ dependencies {
+@@ -221,13 +221,13 @@ dependencies {
  apply plugin: 'com.modrinth.minotaur'
  modrinth {
      token = System.getenv("MODRINTH_TOKEN") // This is the default. Remember to have the MODRINTH_TOKEN environment variable set or else this will fail, or set it to whatever you want - just make sure it stays private!
 -    projectId = "c2me-fabric" // This can be the project ID or the slug. Either will work!
 +    projectId = "c2me-neoforge" // This can be the project ID or the slug. Either will work!
-     versionNumber = project.version + "+" + project.minecraft_version // You don't need to set this manually. Will fail if Modrinth has this version already
+     versionNumber = project.version + "+" + project.minecraft_version.replaceAll("-snapshot-", "-snap-") // You don't need to set this manually. Will fail if Modrinth has this version already
      versionName = project.version + " devbuild for " + project.minecraft_version
      versionType = "alpha" // This is the default -- can also be `beta` or `alpha`
      uploadFile = remapJar // With Loom, this MUST be set to `remapJar` instead of `jar`!
@@ -24,12 +24,12 @@ index f9119574..ba485e3f 100644
      changelog = com.ishland.c2me.gradle.ParseGItHubActionChangelog.getChangelog()
  }
  
-@@ -242,7 +242,7 @@ if (!project.minecraft_version.contains("w") && !project.minecraft_version.conta
+@@ -245,7 +245,7 @@ if (!project.minecraft_version.contains("-")) { // rough filter for snapshots
                  }
  
                  gameVersion("minecraft-" + matcher.group(1) + "-" + matcher.group(2), project.minecraft_version.replace('.', '-'))
 -                gameVersion("modloader", "fabric")
 +                gameVersion("modloader", "neoforge")
-                 gameVersion("java", "java-22")
-                 gameVersion("java", "java-21")
+                 gameVersion("java", "java-25")
                  gameVersion("environment", "server")
+                 gameVersion("environment", "client")
