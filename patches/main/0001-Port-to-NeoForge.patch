@@ -3553,7 +3553,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index c78c4986..613bfbfb 100644
+index 7b242e19..8b37f903 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,22 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -3565,12 +3565,12 @@ index c78c4986..613bfbfb 100644
 +
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.1
- yarn_mappings=26.1+build.1
--loader_version=0.18.4
--fabric_version=0.143.7+26.1
+ minecraft_version=26.1.1
+ yarn_mappings=26.1.1+build.1
+-loader_version=0.18.5
+-fabric_version=0.144.4+26.1
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.1.0.1-beta
++forge_version=26.1.1.0-beta
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.3.7+alpha.0
