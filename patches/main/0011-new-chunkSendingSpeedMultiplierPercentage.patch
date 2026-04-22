@@ -1,0 +1,95 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Wed, 22 Apr 2026 23:29:48 +0800
+Subject: [PATCH] new: chunkSendingSpeedMultiplierPercentage
+
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
+index bc6c6f3c..7a55f32d 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
+@@ -322,7 +322,14 @@ public class ConfigSystem {
+             public boolean test(long value) {
+                 return value >= 1;
+             }
+-        };
++        },
++        NON_NEGATIVE_VALUE_ONLY() {
++            @Override
++            public boolean test(long value) {
++                return value >= 0;
++            }
++        },
++        ;
+ 
+         public abstract boolean test(long value);
+ 
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+index 9f9f2df5..757e1550 100644
+--- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
+@@ -32,6 +32,16 @@ public class Config {
+                     " This will send chunks twice increasing network load")
+             .getBoolean(false, true);
+ 
++    public static final long chunkSendingSpeedMultiplierPercentage = new ConfigSystem.ConfigAccessor()
++            .key("noTickViewDistance.chunkSendingSpeedMultiplierPercentage")
++            .comment("""
++                    Applies a multiplier *in percentage* to the target chunk sending rate from vanilla
++                    Setting this to 0 disables rate limiting
++                    
++                    Defaults to 200, which is 200%
++                    """)
++            .getLong(200L, 100L, ConfigSystem.LongChecks.NON_NEGATIVE_VALUE_ONLY);
++
+     public static final int maxViewDistance = 1 << 16;
+ 
+     public static void init() {
+diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkDataSender.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkDataSender.java
+new file mode 100644
+index 00000000..829a2257
+--- /dev/null
++++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/mixin/MixinChunkDataSender.java
+@@ -0,0 +1,30 @@
++package com.ishland.c2me.notickvd.mixin;
++
++import com.ishland.c2me.notickvd.common.Config;
++import net.minecraft.server.network.ChunkDataSender;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Shadow;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.ModifyVariable;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++
++@Mixin(ChunkDataSender.class)
++public class MixinChunkDataSender {
++
++    @Shadow
++    private float desiredBatchSize;
++
++    @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true)
++    private static boolean modifyInit(boolean local) {
++        return local || Config.chunkSendingSpeedMultiplierPercentage == 0L;
++    }
++
++    @Inject(method = "onAcknowledgeChunks", at = @At("RETURN"))
++    private void modifyBatchSize(float desiredBatchSize, CallbackInfo ci) {
++        if (Config.chunkSendingSpeedMultiplierPercentage > 0L) {
++            this.desiredBatchSize *= ((float) Config.chunkSendingSpeedMultiplierPercentage) / 100.0F;
++        }
++    }
++
++}
+diff --git a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+index a80b538f..62e0ed58 100644
+--- a/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
++++ b/c2me-notickvd/src/main/resources/c2me-notickvd.mixins.json
+@@ -4,6 +4,7 @@
+   "package": "com.ishland.c2me.notickvd.mixin",
+   "plugin": "com.ishland.c2me.base.common.ModuleMixinPlugin",
+   "mixins": [
++    "MixinChunkDataSender",
+     "MixinChunkHolder",
+     "MixinChunkTicketManager",
+     "MixinChunkTicketManagerNearbyChunkTicketUpdater",
