@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Tue, 5 May 2026 19:48:53 +0800
+Subject: [PATCH] new: sodium 0.8.11 backport extended view distance support
+
+
+diff --git a/c2me-client-uncapvd/build.gradle b/c2me-client-uncapvd/build.gradle
+index 4dcaf71f..3fe06389 100644
+--- a/c2me-client-uncapvd/build.gradle
++++ b/c2me-client-uncapvd/build.gradle
+@@ -9,3 +9,17 @@ jar {
+         ])
+     }
+ }
++repositories {
++    maven {
++        name = "CaffeineMC snapshots"
++        url = "https://maven.caffeinemc.net/snapshots"
++    }
++    maven {
++        name = "CaffeineMC releases"
++        url = "https://maven.caffeinemc.net/releases"
++    }
++}
++
++dependencies {
++    modImplementation "net.caffeinemc:sodium-neoforge-api:0.8.12-alpha.3+mc1.21.1"
++}
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/SodiumConfigBuilder.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/SodiumConfigBuilder.java
+new file mode 100644
+index 00000000..f8555948
+--- /dev/null
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/common/SodiumConfigBuilder.java
+@@ -0,0 +1,23 @@
++package com.ishland.c2me.client.uncapvd.common;
++
++import com.ishland.c2me.client.uncapvd.ModuleEntryPoint;
++import net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint;
++import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
++import net.minecraft.util.Identifier;
++
++public class SodiumConfigBuilder implements ConfigEntryPoint {
++    @Override
++    public void registerConfigLate(ConfigBuilder builder) {
++        if (!ModuleEntryPoint.enabled) {
++            return;
++        }
++
++        Identifier renderDistance = Identifier.of("sodium", "general.render_distance");
++        builder.registerOwnModOptions()
++                .registerOptionOverlay(
++                        renderDistance,
++                        builder.createIntegerOption(renderDistance)
++                                .setRange(2, Config.maxViewDistance, 1)
++                );
++    }
++}
+diff --git a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+index c98ae3d9..2289abcf 100644
+--- a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+@@ -18,6 +18,9 @@ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+ [[mixins]]
+ config="c2me-client-uncapvd.mixins.json"
+ 
++[modproperties.c2me_client_uncapvd]
++"sodium:config_api_user" = "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
++
+ [[dependencies.c2me_client_uncapvd]]
+ modId = "minecraft"
+ type = "required"
