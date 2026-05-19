@@ -5,14 +5,14 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 63a91cab..84529b81 100644
+index 63a91cab..e328e2ff 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,6 +1,6 @@
  plugins {
      id 'java-library'
 -    id 'net.fabricmc.fabric-loom-remap' version '1.15-SNAPSHOT' apply false
-+    id 'org.relativitymc.neo-loom-remap' version '1.15-SNAPSHOT' apply false
++    id 'org.relativitymc.neo-loom-remap' version '1.16-SNAPSHOT' apply false
      id "me.champeau.jmh" version "0.7.2"
      id 'com.modrinth.minotaur' version '2.+' apply false
      id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
@@ -55,7 +55,7 @@ index 63a91cab..84529b81 100644
 +            it.mappings("org.relativitymc:modern-yarn:$project.yarn_mappings:v2")
 +            it.mappings("org.relativitymc:modern-yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
          }
-+        neoForge "net.neoforged:neoforge:${project.forge_version}"
++        forgeUserdev "net.neoforged:neoforge:${project.forge_version}:userdev"
      }
  
 +
@@ -253,7 +253,7 @@ index 7fd0863f..ff8f3dab 100644
          if (!isEnabled) {
              LOGGER.info("Disabling {}", mixinPackage);
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-index 480df3b6..deaf7b00 100644
+index ebf76dab..70853983 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 @@ -3,11 +3,16 @@ package com.ishland.c2me.base.common.config;
@@ -1447,7 +1447,7 @@ index 6d46744f..1e4ca266 100644
 +    }
 +}
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
-index 2ab00eb6..cfc7c14c 100644
+index ae7c58bc..6a434c0d 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 +++ b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/Config.java
 @@ -3,7 +3,6 @@ package com.ishland.c2me.notickvd.common;
@@ -1468,7 +1468,7 @@ index 2ab00eb6..cfc7c14c 100644
 +                    """.formatted(C2MEConstants.EXT_RENDER_DISTANCE_ID))
              .getBoolean(true, false);
  
-     public static final boolean smoothChunkSendingRate = new ConfigSystem.ConfigAccessor()
+     public static final boolean ensureChunkCorrectness = new ConfigSystem.ConfigAccessor()
 diff --git a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java b/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
 index e8383e1e..7f3661a7 100644
 --- a/c2me-notickvd/src/main/java/com/ishland/c2me/notickvd/common/NoTickVDInitializer.java
@@ -3553,7 +3553,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 7b242e19..8b37f903 100644
+index e9a58c45..6d543617 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -8,20 +8,22 @@ gradle-curseforge-publish.interop.forge-gradle=false
@@ -3565,12 +3565,13 @@ index 7b242e19..8b37f903 100644
 +
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.1.1
- yarn_mappings=26.1.1+build.1
+ minecraft_version=26.1.2
+-yarn_mappings=26.1.2+build.1
 -loader_version=0.18.5
--fabric_version=0.144.4+26.1
+-fabric_version=0.145.4+26.1.2
++yarn_mappings=26.1.2+build.2
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.1.1.0-beta
++forge_version=26.1.2.59-beta
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.3.7+alpha.0
@@ -3769,7 +3770,7 @@ index bf73b870..00000000
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 987ffcc6..9d0a951f 100644
+index 987ffcc6..ad52e2bd 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
 @@ -1,11 +1,11 @@
@@ -3809,7 +3810,7 @@ index 987ffcc6..9d0a951f 100644
 +            it.mappings("org.relativitymc:modern-yarn:$project.yarn_mappings:v2")
 +            it.mappings("org.relativitymc:modern-yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
 +        }
-+        neoForge "net.neoforged:neoforge:${project.forge_version}"
++        forgeUserdev "net.neoforged:neoforge:${project.forge_version}:userdev"
          implementation "com.ibm.async:asyncutil:${async_util_version}"
      }
      processResources {
