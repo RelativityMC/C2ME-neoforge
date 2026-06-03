@@ -1,0 +1,599 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jordan Olivet <jordanolivet@gmail.com>
+Date: Thu, 4 Jun 2026 01:07:16 +0200
+Subject: [PATCH] fix: deadlock from re-entrant getChunk during chunk loading
+ (+ sync-load stall watchdog)
+
+A C2ME chunk-loading worker (e.g. a FlowSched WorkerThread running a chunk's light
+step) could re-enter getChunk(..., create=true) for a not-yet-FULL chunk via a mod's
+getBlockEntity -- e.g. treechop's ChoppedLogBlock.getShape during StarLight/ScalableLux
+edge checks -- and block forever, because the awaited status can only be reached once
+that very task finishes (often for the same chunk: its object is already a full
+WorldChunk while its scheduler status is still initialize_light). A server thread
+blocked in a synchronous getChunkBlocking for that chunk then deadlocks too. Triggered
+in production by Mekanism force-chunk reinstatement, FTB Chunks login force-load, and
+the butcher MCreator mod reading unloaded chunks under the Async mod.
+
+Fix (re-entrancy barrier): in shortcutGetChunk, a chunk-loading thread (a FlowSched
+WorkerThread, or any thread currently running a ChunkTaskWork) returns the
+best-available chunk (getLatest) instead of blocking on a re-entrant getChunk.
+
+Also adds, behind -Dc2me.syncLoadStallThresholdMs (default 8000ms, 0 disables), a
+SyncLoadStallWatchdog that, when a main-thread getChunkBlocking stalls, logs the stuck
+chunk holder's scheduler state (status/target/per-status futures/unsatisfied deps) plus
+a filtered thread dump of the C2ME worker/scheduler/storage threads -- the exact
+artifacts needed to diagnose such stalls on a headless JRE. A /c2me synctest debug
+command forces synchronous far-chunk loads for testing.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/ISyncLoadDiagnostics.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/ISyncLoadDiagnostics.java
+new file mode 100644
+index 00000000..7b1c4205
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/ISyncLoadDiagnostics.java
+@@ -0,0 +1,18 @@
++package com.ishland.c2me.base.common.scheduler;
++
++/**
++ * Implemented (via mixin) by the vanilla chunk manager / loading manager when the chunk system rewrite is present.
++ * Lets the {@link SyncLoadStallWatchdog} (which lives in c2me-base and must not depend on the rewrite module)
++ * pull a human-readable dump of a stuck chunk holder's state without a hard module dependency.
++ */
++public interface ISyncLoadDiagnostics {
++
++    /**
++     * @param pos packed chunk position ({@code ChunkPos.toLong})
++     * @return a multi-line, human-readable description of the holder's current scheduler state, or a placeholder
++     *         when no diagnostics are available.
++     */
++    default String c2me$dumpSyncLoadDiagnostics(long pos) {
++        return "(chunk-system rewrite not present; no holder diagnostics)";
++    }
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/SyncLoadStallWatchdog.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/SyncLoadStallWatchdog.java
+new file mode 100644
+index 00000000..9d23a52b
+--- /dev/null
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/scheduler/SyncLoadStallWatchdog.java
+@@ -0,0 +1,200 @@
++package com.ishland.c2me.base.common.scheduler;
++
++import net.minecraft.server.world.ServerWorld;
++import net.minecraft.util.math.ChunkPos;
++import net.minecraft.world.chunk.ChunkStatus;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import java.util.Map;
++import java.util.concurrent.ConcurrentLinkedQueue;
++import java.util.function.BooleanSupplier;
++
++/**
++ * Diagnostic watchdog for the synchronous, main-thread {@code getChunk}/{@code getChunkBlocking} path.
++ * <p>
++ * When the server thread blocks in {@code MainThreadExecutor.managedBlock(future::isDone)} waiting for an
++ * unloaded chunk, and the wait exceeds a threshold, this watchdog dumps:
++ * <ul>
++ *     <li>the awaited chunk position / requested status / elapsed time,</li>
++ *     <li>the stuck chunk holder's scheduler state (via {@link ISyncLoadDiagnostics}, best-effort), and</li>
++ *     <li>a filtered thread dump of the C2ME worker / scheduler / storage threads and the server thread.</li>
++ * </ul>
++ * This turns the otherwise-silent deadlock (see the deadlock investigation) into the exact artifacts that are
++ * needed to pinpoint which scheduler primitive stalled.
++ * <p>
++ * Enabled by default; the wait threshold is {@code -Dc2me.syncLoadStallThresholdMs} (default 8000). Set it to
++ * {@code 0} (or negative) to disable the watchdog entirely. Overhead is one queue add/remove per sync load.
++ */
++public final class SyncLoadStallWatchdog {
++
++    private static final Logger LOGGER = LoggerFactory.getLogger("C2ME Sync-Load Watchdog");
++
++    private static final long THRESHOLD_NANOS;
++    private static final long REPEAT_NANOS = 10_000_000_000L; // re-dump every 10s while still stalled
++    private static final long POLL_MILLIS = 1_000L;
++
++    static {
++        long ms = Long.getLong("c2me.syncLoadStallThresholdMs", 8_000L);
++        THRESHOLD_NANOS = ms <= 0 ? Long.MAX_VALUE : ms * 1_000_000L;
++    }
++
++    private static final ConcurrentLinkedQueue<Record> ACTIVE = new ConcurrentLinkedQueue<>();
++    private static volatile boolean started = false;
++
++    private SyncLoadStallWatchdog() {
++    }
++
++    public static boolean isEnabled() {
++        return THRESHOLD_NANOS != Long.MAX_VALUE;
++    }
++
++    /**
++     * Register an in-progress synchronous main-thread chunk wait. The returned token MUST be closed
++     * (use try-with-resources) when the wait completes.
++     */
++    public static Token begin(ServerWorld world, ChunkPos pos, ChunkStatus status, boolean create,
++                              BooleanSupplier done, ISyncLoadDiagnostics diagnostics) {
++        if (!isEnabled()) {
++            return NOOP;
++        }
++        ensureStarted();
++        final Record record = new Record(world, pos, status, create, done, diagnostics, System.nanoTime());
++        ACTIVE.add(record);
++        return record;
++    }
++
++    private static void ensureStarted() {
++        if (started) {
++            return;
++        }
++        synchronized (SyncLoadStallWatchdog.class) {
++            if (started) {
++                return;
++            }
++            final Thread thread = new Thread(SyncLoadStallWatchdog::loop, "c2me-syncload-watchdog");
++            thread.setDaemon(true);
++            thread.setPriority(Thread.NORM_PRIORITY + 1);
++            thread.start();
++            started = true;
++        }
++    }
++
++    private static void loop() {
++        while (true) {
++            try {
++                Thread.sleep(POLL_MILLIS);
++            } catch (InterruptedException e) {
++                return;
++            }
++            final long now = System.nanoTime();
++            for (Record record : ACTIVE) {
++                try {
++                    if (record.done.getAsBoolean()) {
++                        continue; // completed but token not yet closed; will be removed shortly
++                    }
++                    final long waited = now - record.startNanos;
++                    if (waited < THRESHOLD_NANOS) {
++                        continue;
++                    }
++                    if (record.dumpedOnce && now - record.lastDumpNanos < REPEAT_NANOS) {
++                        continue;
++                    }
++                    record.dumpedOnce = true;
++                    record.lastDumpNanos = now;
++                    dump(record, waited);
++                } catch (Throwable t) {
++                    LOGGER.error("Error in sync-load watchdog", t);
++                }
++            }
++        }
++    }
++
++    private static void dump(Record record, long waitedNanos) {
++        final StringBuilder sb = new StringBuilder(4096);
++        sb.append('\n');
++        sb.append("================ C2ME SYNCHRONOUS CHUNK LOAD STALL ================\n");
++        sb.append(String.format("Chunk %s in %s has been blocking the server thread for %.1fs (requested status >= %s, create=%s)\n",
++                record.pos, record.world.getRegistryKey().getValue(), waitedNanos / 1.0e9, record.status, record.create));
++        sb.append("This is the synchronous getChunk/getChunkBlocking deadlock if the time keeps growing across dumps.\n");
++
++        sb.append("--- Stuck chunk holder state ---\n");
++        try {
++            final ISyncLoadDiagnostics diag = record.diagnostics;
++            sb.append(diag != null ? diag.c2me$dumpSyncLoadDiagnostics(record.pos.toLong())
++                    : "(no chunk-system diagnostics provider)").append('\n');
++        } catch (Throwable t) {
++            sb.append("(failed to dump holder state: ").append(t).append(")\n");
++        }
++
++        sb.append("--- Thread dump (C2ME scheduler/worker/storage + server threads) ---\n");
++        appendThreadDump(sb);
++
++        sb.append("================ END SYNCHRONOUS CHUNK LOAD STALL ================");
++        LOGGER.error(sb.toString());
++    }
++
++    private static void appendThreadDump(StringBuilder sb) {
++        final Map<Thread, StackTraceElement[]> all = Thread.getAllStackTraces();
++        for (Map.Entry<Thread, StackTraceElement[]> entry : all.entrySet()) {
++            final Thread thread = entry.getKey();
++            final String name = thread.getName();
++            if (!isInteresting(name)) {
++                continue;
++            }
++            sb.append('"').append(name).append("\" #").append(thread.threadId())
++                    .append(' ').append(thread.getState()).append('\n');
++            for (StackTraceElement element : entry.getValue()) {
++                sb.append("\tat ").append(element).append('\n');
++            }
++            sb.append('\n');
++        }
++    }
++
++    private static boolean isInteresting(String name) {
++        if (name == null) {
++            return false;
++        }
++        return name.equals("Server thread")
++                || name.startsWith("c2me-")
++                || name.startsWith("C2ME ")
++                || name.contains("Worker-Main")
++                || name.contains("ForkJoinPool");
++    }
++
++    public interface Token extends AutoCloseable {
++        @Override
++        void close();
++    }
++
++    private static final Token NOOP = () -> {
++    };
++
++    private static final class Record implements Token {
++        final ServerWorld world;
++        final ChunkPos pos;
++        final ChunkStatus status;
++        final boolean create;
++        final BooleanSupplier done;
++        final ISyncLoadDiagnostics diagnostics;
++        final long startNanos;
++        volatile boolean dumpedOnce = false;
++        volatile long lastDumpNanos = 0L;
++
++        Record(ServerWorld world, ChunkPos pos, ChunkStatus status, boolean create,
++               BooleanSupplier done, ISyncLoadDiagnostics diagnostics, long startNanos) {
++            this.world = world;
++            this.pos = pos;
++            this.status = status;
++            this.create = create;
++            this.done = done;
++            this.diagnostics = diagnostics;
++            this.startNanos = startNanos;
++        }
++
++        @Override
++        public void close() {
++            ACTIVE.remove(this);
++        }
++    }
++}
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java
+index 37848ff0..7b3f5ac7 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/RunningWork.java
+@@ -4,4 +4,17 @@ public interface RunningWork {
+ 
+     String toString();
+ 
++    /**
++     * Whether, while this work item is on a thread's stack, an off-thread {@code getChunk} must not block.
++     *
++     * <p>Chunk-system tasks (worldgen/light steps) run on background threads and may re-enter {@code getChunk}
++     * — e.g. the light engine reading a block via a mod's {@code getBlockEntity}. Blocking such a re-entrant
++     * load deadlocks the chunk system, because the awaited status can only be reached once the very task that
++     * is blocking finishes. When this returns {@code true}, the re-entrant {@code getChunk} returns the
++     * best-available chunk instead of blocking.</p>
++     */
++    default boolean isReentrantChunkLoadBarrier() {
++        return false;
++    }
++
+ }
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java
+index 8359eb6a..88035355 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/threadstate/ThreadState.java
+@@ -52,6 +52,24 @@ public class ThreadState {
+         }
+     }
+ 
++    /**
++     * @return whether this thread is currently executing a chunk-system task that forbids blocking on a
++     *         re-entrant {@code getChunk} (see {@link RunningWork#isReentrantChunkLoadBarrier()}).
++     */
++    public boolean isExecutingReentrantChunkLoadBarrier() {
++        lock.readLock().lock();
++        try {
++            for (RunningWork work : runningWorks) {
++                if (work.isReentrantChunkLoadBarrier()) {
++                    return true;
++                }
++            }
++            return false;
++        } finally {
++            lock.readLock().unlock();
++        }
++    }
++
+     public static record WorkClosable(ThreadState state, RunningWork work) implements Closeable {
+         @Override
+         public void close() {
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
+index c0b9cfe0..98f8e9ce 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/instrumentation/MixinServerChunkManager.java
+@@ -1,7 +1,9 @@
+ package com.ishland.c2me.base.mixin.instrumentation;
+ 
++import com.ishland.c2me.base.common.scheduler.ISyncLoadDiagnostics;
+ import com.ishland.c2me.base.common.scheduler.ISyncLoadManager;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
++import com.ishland.c2me.base.common.scheduler.SyncLoadStallWatchdog;
+ import com.ishland.c2me.base.common.threadstate.SyncLoadWork;
+ import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+@@ -57,7 +59,9 @@ public abstract class MixinServerChunkManager implements ISyncLoadManager {
+         this.currentSyncLoadChunk = new ChunkPos(x, z);
+         syncLoadNanos = System.nanoTime();
+         ((IVanillaChunkManager) this.chunkLoadingManager).c2me$getSchedulingManager().setCurrentSyncLoad(this.currentSyncLoadChunk);
+-        try (var ignored = ThreadInstrumentation.getCurrent().begin(new SyncLoadWork(this.world, new ChunkPos(x, z), leastStatus, create))) {
++        final ISyncLoadDiagnostics diagnostics = this.chunkLoadingManager instanceof ISyncLoadDiagnostics d ? d : null;
++        try (var ignored = ThreadInstrumentation.getCurrent().begin(new SyncLoadWork(this.world, new ChunkPos(x, z), leastStatus, create));
++             var ignored2 = SyncLoadStallWatchdog.begin(this.world, this.currentSyncLoadChunk, leastStatus, create, stopCondition, diagnostics)) {
+             original.call(instance, stopCondition);
+         } finally {
+             ((IVanillaChunkManager) this.chunkLoadingManager).c2me$getSchedulingManager().setCurrentSyncLoad(null);
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java
+index 35f0bd55..11bd0372 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/threadstate/ChunkTaskWork.java
+@@ -30,6 +30,11 @@ public record ChunkTaskWork(ServerWorld world, ChunkPos chunkPos, NewChunkStatus
+         );
+     }
+ 
++    @Override
++    public boolean isReentrantChunkLoadBarrier() {
++        return true;
++    }
++
+     @Override
+     public String toString() {
+         if (isUpgrade) {
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
+index c897fc53..8bb3b908 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinServerChunkManager.java
+@@ -1,6 +1,9 @@
+ package com.ishland.c2me.rewrites.chunksystem.mixin;
+ 
++import com.ishland.c2me.base.common.threadstate.ThreadInstrumentation;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
++import com.ishland.flowsched.executor.WorkerThread;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
+ import com.ishland.c2me.rewrites.chunksystem.common.ducks.IChunkSystemAccess;
+ import com.ishland.c2me.rewrites.chunksystem.common.structs.ChunkSystemExecutors;
+ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+@@ -57,6 +60,24 @@ public abstract class MixinServerChunkManager {
+                     cir.setReturnValue(chunk); // also cancels
+                     return;
+                 }
++                // Re-entrancy barrier: when this off-thread getChunk happens *inside* a chunk-system task
++                // (e.g. the light engine reaching into a not-yet-full chunk via a mod's getBlockEntity such
++                // as treechop's ChoppedLogBlock.getShape), blocking here deadlocks the chunk system — the
++                // task would wait for a status that can only be reached once the task itself finishes, often
++                // for the very same chunk. Return the best-available chunk object instead of blocking.
++                //
++                // C2ME chunk-loading work (status steps, the light engine, etc.) all runs on FlowSched
++                // WorkerThreads, so those must never block here. The ChunkTaskWork check additionally covers
++                // chunk tasks that may run on other threads (e.g. async continuations).
++                if (Thread.currentThread() instanceof WorkerThread
++                        || ThreadInstrumentation.getCurrent().isExecutingReentrantChunkLoadBarrier()) {
++                    Chunk latest = ((NewChunkHolderVanillaInterface) holder).getLatest();
++                    if (latest instanceof WrapperProtoChunk readOnlyChunk) latest = readOnlyChunk.getWrappedChunk();
++                    if (latest != null) {
++                        cir.setReturnValue(latest); // also cancels
++                        return;
++                    }
++                }
+             }
+         }
+     }
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinThreadedAnvilChunkStorage.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinThreadedAnvilChunkStorage.java
+index 0a26667b..d72c37df 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinThreadedAnvilChunkStorage.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/mixin/MixinThreadedAnvilChunkStorage.java
+@@ -1,13 +1,17 @@
+ package com.ishland.c2me.rewrites.chunksystem.mixin;
+ 
+ import com.google.common.util.concurrent.ThreadFactoryBuilder;
++import com.ishland.c2me.base.common.scheduler.ISyncLoadDiagnostics;
+ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkLoadingContext;
+ import com.ishland.c2me.rewrites.chunksystem.common.ChunkState;
+ import com.ishland.c2me.rewrites.chunksystem.common.ducks.IChunkSystemAccess;
+ import com.ishland.c2me.rewrites.chunksystem.common.NewChunkHolderVanillaInterface;
++import com.ishland.c2me.rewrites.chunksystem.common.NewChunkStatus;
+ import com.ishland.c2me.rewrites.chunksystem.common.TheChunkSystem;
+ import com.ishland.flowsched.scheduler.ItemHolder;
++import com.ishland.flowsched.scheduler.ItemStatus;
++import com.ishland.flowsched.scheduler.KeyStatusPair;
+ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+ import net.minecraft.server.world.ChunkHolder;
+ import net.minecraft.server.world.ServerChunkLoadingManager;
+@@ -26,7 +30,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+ 
+ @Mixin(ServerChunkLoadingManager.class)
+-public class MixinThreadedAnvilChunkStorage implements IChunkSystemAccess {
++public class MixinThreadedAnvilChunkStorage implements IChunkSystemAccess, ISyncLoadDiagnostics {
+ 
+     @Shadow @Final private ServerWorld world;
+     private TheChunkSystem newSystem;
+@@ -98,4 +102,102 @@ public class MixinThreadedAnvilChunkStorage implements IChunkSystemAccess {
+     public TheChunkSystem c2me$getTheChunkSystem() {
+         return this.newSystem;
+     }
++
++    @Override
++    public String c2me$dumpSyncLoadDiagnostics(long pos) {
++        final ChunkPos cpos = new ChunkPos(pos);
++        final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = this.newSystem.getHolder(cpos);
++        if (holder == null) {
++            return "holder=null for " + cpos + " (no ticket present / not scheduled in the chunk system)";
++        }
++        final StringBuilder sb = new StringBuilder(512);
++        try {
++            final ItemStatus<ChunkPos, ChunkState, ChunkLoadingContext> status;
++            final ItemStatus<ChunkPos, ChunkState, ChunkLoadingContext> target;
++            final ItemStatus<ChunkPos, ChunkState, ChunkLoadingContext> upgradingTo;
++            final boolean busy;
++            final int flags;
++            synchronized (holder) {
++                status = holder.getStatus();
++                target = holder.getTargetStatus();
++                upgradingTo = holder.upgradingStatusTo();
++                busy = holder.isBusy();
++                flags = holder.getFlags();
++            }
++            sb.append("holder ").append(cpos)
++                    .append(": status=").append(status)
++                    .append(" target=").append(target)
++                    .append(" upgradingTo=").append(upgradingTo)
++                    .append(" busy=").append(busy)
++                    .append(" flags=0b").append(Integer.toBinaryString(flags))
++                    .append('\n');
++
++            // Per-status future state; find the first incomplete status strictly between current and target.
++            NewChunkStatus stuck = null;
++            sb.append("  futures: ");
++            for (NewChunkStatus s : NewChunkStatus.ALL_STATUSES) {
++                final java.util.concurrent.CompletableFuture<Void> f = holder.getFutureForStatus0(s);
++                final String state;
++                if (f == null) {
++                    state = "null";
++                } else if (!f.isDone()) {
++                    state = "PENDING";
++                    if (stuck == null && s.ordinal() > status.ordinal() && s.ordinal() <= target.ordinal()) {
++                        stuck = s;
++                    }
++                } else if (f.isCompletedExceptionally()) {
++                    state = "exc/unloaded";
++                } else {
++                    state = "done";
++                }
++                sb.append(s).append('=').append(state).append("  ");
++            }
++            sb.append('\n');
++
++            // Dependencies of the blocking status (or the next status to advance to).
++            final ItemStatus<ChunkPos, ChunkState, ChunkLoadingContext> probe =
++                    stuck != null ? stuck : (status.ordinal() < target.ordinal() ? status.getNext() : null);
++            if (probe != null) {
++                sb.append("  blocking status=").append(probe).append(" deps: ");
++                try {
++                    final KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext>[] deps;
++                    synchronized (holder) {
++                        deps = holder.getDependencies(probe);
++                    }
++                    if (deps == null) {
++                        sb.append("(none set yet -- dependency tickets not requested)");
++                    } else if (deps.length == 0) {
++                        sb.append("(no neighbor deps)");
++                    } else {
++                        int incomplete = 0;
++                        for (KeyStatusPair<ChunkPos, ChunkState, ChunkLoadingContext> dep : deps) {
++                            final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> dh =
++                                    this.newSystem.getHolder(dep.key());
++                            final boolean satisfied = dh != null && dh.getStatus().ordinal() >= dep.status().ordinal();
++                            if (!satisfied) {
++                                incomplete++;
++                                if (incomplete <= 12) {
++                                    sb.append(dep.key()).append('@').append(dep.status())
++                                            .append('[').append(dh == null ? "null"
++                                                    : (dh.getStatus() + "/" + dh.getTargetStatus() + (dh.isBusy() ? ",busy" : ""))).append("] ");
++                                }
++                            }
++                        }
++                        sb.append("=> ").append(incomplete).append('/').append(deps.length).append(" deps unsatisfied");
++                    }
++                } catch (Throwable t) {
++                    sb.append("(deps error: ").append(t).append(')');
++                }
++                sb.append('\n');
++            }
++
++            final ChunkState cs = holder.getItem().get();
++            sb.append("  chunkState: ").append(cs == null ? "null"
++                    : ("chunk=" + (cs.chunk() != null ? cs.chunk().getStatus() : "null")
++                       + " reached=" + cs.reachedStatus() + " wasFull=" + cs.wasFullChunk()));
++        } catch (Throwable t) {
++            sb.append("\n(error while dumping holder: ").append(t).append(')');
++        }
++        return sb.toString();
++    }
+ }
+diff --git a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+index f63a2495..fa62e601 100644
+--- a/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
++++ b/c2me-server-utils/src/main/java/com/ishland/c2me/server/utils/common/C2MECommands.java
+@@ -3,12 +3,18 @@ package com.ishland.c2me.server.utils.common;
+ import com.ishland.c2me.base.mixin.access.IServerChunkManager;
+ import com.ishland.c2me.notickvd.common.ChunkTicketManagerExtension;
+ import com.mojang.brigadier.CommandDispatcher;
++import com.mojang.brigadier.arguments.IntegerArgumentType;
+ import com.mojang.brigadier.context.CommandContext;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.command.CommandManager;
+ import net.minecraft.server.command.ServerCommandSource;
+ import net.minecraft.server.world.ChunkTicketManager;
+ import net.minecraft.server.world.ServerChunkManager;
++import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.text.Text;
++import net.minecraft.world.chunk.ChunkStatus;
++
++import java.util.concurrent.ThreadLocalRandom;
+ 
+ public class C2MECommands {
+ 
+@@ -21,6 +27,15 @@ public class C2MECommands {
+                                         .requires(unused -> com.ishland.c2me.notickvd.ModuleEntryPoint.enabled)
+                                         .executes(C2MECommands::noTickCommand)
+                         )
++                        .then(
++                                // Diagnostic: forces synchronous main-thread chunk loads of far, ungenerated chunks
++                                // (the getChunkBlocking path). Used to provoke / verify the sync-load deadlock.
++                                CommandManager.literal("synctest")
++                                        .then(CommandManager.argument("radius", IntegerArgumentType.integer(0, 64))
++                                                .executes(ctx -> syncTestCommand(ctx, IntegerArgumentType.getInteger(ctx, "radius"), 16))
++                                                .then(CommandManager.argument("spacing", IntegerArgumentType.integer(1, 4096))
++                                                        .executes(ctx -> syncTestCommand(ctx, IntegerArgumentType.getInteger(ctx, "radius"), IntegerArgumentType.getInteger(ctx, "spacing")))))
++                        )
+ //                        .then(
+ //                                CommandManager.literal("debug")
+ //                                        .requires(unused -> FabricLoader.getInstance().isDevelopmentEnvironment())
+@@ -33,6 +48,35 @@ public class C2MECommands {
+         );
+     }
+ 
++    private static int syncTestCommand(CommandContext<ServerCommandSource> ctx, int radius, int spacing) {
++        final MinecraftServer server = ctx.getSource().getServer();
++        // Use the server's overworld directly (not the command source's level, which is null on the dedicated console).
++        final ServerWorld world = server.getOverworld();
++        // Random far origin (in chunk coords) so every invocation hits fresh, ungenerated chunks.
++        final int baseX = ThreadLocalRandom.current().nextInt(-1_000_000, 1_000_000);
++        final int baseZ = ThreadLocalRandom.current().nextInt(-1_000_000, 1_000_000);
++        final int side = 2 * radius + 1;
++        final int total = side * side;
++        ctx.getSource().sendFeedback(() -> Text.of(String.format(
++                "[c2me synctest] Synchronously loading %d far chunk(s) around chunk [%d,%d] on the server thread (getChunkBlocking). The server will freeze here if C2ME deadlocks.",
++                total, baseX, baseZ)), true);
++        final long start = System.nanoTime();
++        int loaded = 0;
++        for (int dx = -radius; dx <= radius; dx++) {
++            for (int dz = -radius; dz <= radius; dz++) {
++                final int cx = baseX + dx * spacing;
++                final int cz = baseZ + dz * spacing;
++                world.getChunk(cx, cz, ChunkStatus.FULL, true); // -> getChunkBlocking (synchronous main-thread path)
++                loaded++;
++            }
++        }
++        final long ms = (System.nanoTime() - start) / 1_000_000L;
++        final int loadedF = loaded;
++        ctx.getSource().sendFeedback(() -> Text.of(String.format(
++                "[c2me synctest] Done: %d chunks in %d ms (no deadlock this run).", loadedF, ms)), true);
++        return loadedF;
++    }
++
+     private static int noTickCommand(CommandContext<ServerCommandSource> ctx) {
+         final ServerChunkManager chunkManager = ctx.getSource().getWorld().toServerWorld().getChunkManager();
+         final ChunkTicketManager ticketManager = ((IServerChunkManager) chunkManager).getTicketManager();
