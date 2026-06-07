@@ -48,7 +48,7 @@ jobs:
       - name: upload to modrinth and curseforge
         run: |
           cd C2ME-fabric-patched
-          ./gradlew modrinth publishMainPublicationToCurseForge
+          ./gradlew publishMods
         if: github.ref == 'refs/heads/dev/26.1.2'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_UPLOAD_TOKEN }}
