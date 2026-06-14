@@ -5,18 +5,10 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index c16157af..25254587 100644
+index 717c3f39..ca132d92 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -1,6 +1,6 @@
- plugins {
-     id 'java-library'
--    id 'net.fabricmc.fabric-loom-remap' version '1.16-SNAPSHOT' apply false
-+    id 'org.relativitymc.neo-loom-remap' version '1.17.0-alpha.23' apply false
-     id "me.champeau.jmh" version "0.7.2"
-     id 'com.modrinth.minotaur' version '2.+' apply false
-     id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
-@@ -58,7 +58,7 @@ configure(allprojects) {
+@@ -57,7 +57,7 @@ configure(allprojects) {
      }
  
      afterEvaluate {
@@ -25,14 +17,32 @@ index c16157af..25254587 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -91,29 +91,27 @@ allprojects {
+@@ -80,7 +80,7 @@ base {
+ clean.dependsOn gradle.includedBuild('FlowSched').task(':clean')
+ 
+ allprojects {
+-    apply plugin: 'net.fabricmc.fabric-loom-repositories'
++    apply plugin: 'org.relativitymc.neo-loom-repositories'
+     repositories {
+         maven {
+             url = "https://repo.codemc.io/repository/relativitymc/"
+@@ -91,6 +91,15 @@ allprojects {
                  includeGroup "com.github.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-     }
- }
- 
++        maven {
++            name = "Maven for PR #3198" // https://github.com/neoforged/NeoForge/pull/3198
++            url = uri("https://prmaven.neoforged.net/NeoForge/pr3198")
++            content {
++                includeModule("net.neoforged", "neoforge")
++                includeModule("net.neoforged", "testframework")
++            }
++        }
+         def lwjglCentral = mavenCentral {
+             content {
+                 includeGroup "org.lwjgl"
+@@ -124,23 +133,20 @@ allprojects {
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -62,7 +72,7 @@ index c16157af..25254587 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -141,7 +139,7 @@ configure (allprojects - project(":tests")) {
+@@ -173,7 +179,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -71,7 +81,7 @@ index c16157af..25254587 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -182,11 +180,11 @@ configure (allprojects - project(":tests")) {
+@@ -214,11 +220,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -85,7 +95,7 @@ index c16157af..25254587 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -201,11 +199,9 @@ configure (allprojects - project(":tests")) {
+@@ -233,11 +239,9 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -98,7 +108,7 @@ index c16157af..25254587 100644
              include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
              include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
              include implementation("com.github.ben-manes.caffeine:caffeine:${caffeine_version}")
-@@ -214,7 +210,6 @@ configure (allprojects - project(":tests")) {
+@@ -246,7 +250,6 @@ configure (allprojects - project(":tests")) {
          testImplementation platform("org.junit:junit-bom:${junit_version}")
          testImplementation 'org.junit.jupiter:junit-jupiter'
          testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -106,16 +116,7 @@ index c16157af..25254587 100644
      }
  
      test {
-@@ -296,7 +291,7 @@ subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
- dependencies {
-     afterEvaluate {
-         (subprojects - project(":tests")).forEach {
--            if (it.parent != project(":")) return
-+            if (it.parent != rootProject) return
- 
-             def projectName = it.name
-             api project(path: ":${projectName}", configuration: "namedElements")
-@@ -310,6 +305,7 @@ dependencies {
+@@ -342,6 +345,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
@@ -123,6 +124,30 @@ index c16157af..25254587 100644
      }.standardOutput.asText.get()
      stdout = stdout.toString().strip()
      stdout = stdout.substring(stdout.indexOf('-') + 1) // strip the existing dash
+diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
+index df917290..cef6444d 100644
+--- a/buildSrc/build.gradle
++++ b/buildSrc/build.gradle
+@@ -9,6 +9,10 @@ group = 'com.ishland.c2me'
+ repositories {
+     mavenCentral()
+     maven { url = "https://maven.fabricmc.net/" }
++    maven {
++        name = 'RelativityMC'
++        url = 'https://repo.codemc.io/repository/relativitymc/'
++    }
+ }
+ 
+ dependencies {
+@@ -18,7 +22,7 @@ dependencies {
+     // https://mvnrepository.com/artifact/com.google.code.gson/gson
+     implementation 'com.google.code.gson:gson:2.13.2'
+ 
+-    implementation 'net.fabricmc.fabric-loom-remap:net.fabricmc.fabric-loom-remap.gradle.plugin:1.17-SNAPSHOT'
++    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.0-alpha.28'
+ }
+ 
+ gradlePlugin {
 diff --git a/c2me-base/build.gradle b/c2me-base/build.gradle
 index bd953590..d8ba08a9 100644
 --- a/c2me-base/build.gradle
@@ -744,10 +769,10 @@ index 022081e2..cc3d6d23 100644
      }
  
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
-index 7616f386..cb0e73f2 100644
+index ed9f4497..354c2e05 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
-@@ -48,8 +48,8 @@ public class MixinDedicatedServerWatchdog {
+@@ -46,8 +46,8 @@ public class MixinDedicatedServerWatchdog {
  
      @Shadow @Final private static Logger LOGGER;
  
@@ -758,15 +783,15 @@ index 7616f386..cb0e73f2 100644
          String state = null;
          try {
              state = ThreadInstrumentation.printState(threadInfo);
-@@ -61,8 +61,8 @@ public class MixinDedicatedServerWatchdog {
+@@ -59,8 +59,8 @@ public class MixinDedicatedServerWatchdog {
          }
      }
  
--    @Inject(method = "createCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0), locals = LocalCapture.CAPTURE_FAILHARD)
--    private static void addInstrumentationData(String message, long threadId, CallbackInfoReturnable<CrashReport> cir, ThreadMXBean threadMXBean, ThreadInfo[] threadInfos, StringBuilder stringBuilder, Error error, CrashReport crashReport) {
+-    @Inject(method = "createCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0))
+-    private static void addInstrumentationData(String message, long threadId, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport report) {
 +    @Inject(method = "createWatchdogCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0))
-+    private static void addInstrumentationData(String message, long threadId, String message1, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport crashReport) {
-         CrashReportSection section = crashReport.addElement("Thread trace dump (obtained on a best-effort basis)");
++    private static void addInstrumentationData(String message, long threadId, String message1, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport report) {
+         CrashReportSection section = report.addElement("Thread trace dump (obtained on a best-effort basis)");
          try {
              for (Map.Entry<Thread, ThreadState> entry : ThreadInstrumentation.entrySet()) {
 diff --git a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
@@ -802,10 +827,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 5bca5463..7007890f 100644
+index 46c34f40..d34be4dc 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -68,16 +68,16 @@
+@@ -66,16 +66,16 @@
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
      "access.IXoroshiro128PlusPlusRandomSplitter",
@@ -1965,7 +1990,7 @@ index 00000000..e54eab96
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
-index ec44e205..15824695 100644
+index c2de673d..2ab7e3cb 100644
 --- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 +++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 @@ -5,8 +5,6 @@
@@ -2650,18 +2675,18 @@ index 63e5432f..a03ce5fe 100644
 +    }
 +}
 diff --git a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
-index 8e4aea33..472615d1 100644
+index 3e3d98dc..9962be9f 100644
 --- a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
 +++ b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
 @@ -40,9 +40,9 @@ import java.util.List;
  @Mixin(StructureWeightSampler.class)
  public abstract class MixinStructureWeightSampler {
  
--    @Shadow @Final private List<StructureWeightSampler.Piece> field_61465;
-+    @Shadow @Final protected List<StructureWeightSampler.Piece> field_61465;
+-    @Shadow @Final private List<StructureWeightSampler.Piece> pieces;
++    @Shadow @Final protected List<StructureWeightSampler.Piece> pieces;
  
--    @Shadow @Final private List<JigsawJunction> field_61466;
-+    @Shadow @Final protected List<JigsawJunction> field_61466;
+-    @Shadow @Final private List<JigsawJunction> junctions;
++    @Shadow @Final protected List<JigsawJunction> junctions;
  
      @Shadow
      private static double getStructureWeight(int x, int y, int z, int yy) {
@@ -3239,7 +3264,7 @@ index 9e7224f4..e9c657d1 100644
  
                          worldChunk.setLevelTypeProvider(null);
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
-index eeb781a0..b2df495b 100644
+index e6b11a18..faac340f 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerBlockTicking.java
 @@ -25,7 +25,6 @@
@@ -3725,25 +3750,23 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 70b594ae..fd037e70 100644
+index 7b442617..a97fb813 100644
 --- a/gradle.properties
 +++ b/gradle.properties
-@@ -8,22 +8,24 @@ gradle-curseforge-publish.interop.forge-gradle=false
- gradle-curseforge-publish.interop.neoforged=false
- gradle-curseforge-publish.interop.neogradle=false
+@@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
+ 
+ maven_use_gpr=0
  
 -#org.gradle.configuration-cache=true
 +#fabric.loom.multiProjectOptimisation=true
-+
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.1.2
--yarn_mappings=26.1.2+build.1
--loader_version=0.19.2
--fabric_version=0.145.4+26.1.2
-+yarn_mappings=26.1.2+build.2
+ minecraft_version=26.2-rc-2
+ yarn_mappings=26.2-rc-2+build.1
+-loader_version=0.19.3
+-fabric_version=0.152.0+26.2
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.1.2.59-beta
++forge_version=26.2.0-alpha.0+rc-2.20260614.052634
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.4.0-alpha.0
@@ -3751,7 +3774,7 @@ index 70b594ae..fd037e70 100644
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
  # Publishing metadtaa
- curseforge_minecraft_versions=26.1.2
+ curseforge_minecraft_versions=
  # Java Dependencies
  async_util_version=0.1.0
 -night_config_version=3.6.5
@@ -3759,17 +3782,6 @@ index 70b594ae..fd037e70 100644
  exp4j_version=0.4.8
  rxjava_version=3.1.12
  reactive_streams_version=1.0.4
-diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
-index 221c4f98..9937dae9 100644
---- a/gradle/wrapper/gradle-wrapper.properties
-+++ b/gradle/wrapper/gradle-wrapper.properties
-@@ -1,5 +1,5 @@
- distributionBase=GRADLE_USER_HOME
- distributionPath=wrapper/dists
--distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
-+distributionUrl=https\://services.gradle.org/distributions/gradle-9.5.1-bin.zip
- zipStoreBase=GRADLE_USER_HOME
- zipStorePath=wrapper/dists
 diff --git a/settings.gradle b/settings.gradle
 index 12ca3b14..5132dcd6 100644
 --- a/settings.gradle
@@ -3956,25 +3968,17 @@ index bf73b870..00000000
 -  }
 -}
 diff --git a/tests/build.gradle b/tests/build.gradle
-index 640d57ae..46ac5ee1 100644
+index 64313f6b..42750571 100644
 --- a/tests/build.gradle
 +++ b/tests/build.gradle
-@@ -1,11 +1,11 @@
+@@ -1,5 +1,5 @@
  allprojects {
- //    apply plugin: 'com.ishland.curseforge.modpackresolver'
 -    apply plugin: 'fabric-loom'
 +    apply plugin: 'org.relativitymc.neo-loom-remap'
      apply plugin: 'java-library'
  
      java {
--        sourceCompatibility = JavaVersion.VERSION_17
--        targetCompatibility = JavaVersion.VERSION_17
-+        sourceCompatibility = JavaVersion.VERSION_25
-+        targetCompatibility = JavaVersion.VERSION_25
-     }
- 
-     group = project.maven_group + ".tests"
-@@ -25,6 +25,7 @@ allprojects {
+@@ -21,6 +21,7 @@ allprojects {
              url = "https://www.cursemaven.com"
              content { includeGroup "curse.maven" }
          }
@@ -3982,16 +3986,12 @@ index 640d57ae..46ac5ee1 100644
      }
      loom {
          accessWidenerPath = project(":c2me-base").file("src/main/resources/c2me-base.accesswidener")
-@@ -40,12 +41,11 @@ allprojects {
+@@ -38,8 +39,11 @@ allprojects {
      }
      dependencies {
          minecraft "com.mojang:minecraft:${project.minecraft_version}"
 -        mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
 -        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
--//        modApi 'com.github.astei:lazydfu:0.1.2'
--//        modApi('com.github.RelativityMC:Starlight:03ab3acd94') {
--//            transitive = false
--//        }
 +        mappings loom.layered {
 +            it.mappings("org.relativitymc:modern-yarn:$project.yarn_mappings:v2")
 +            it.mappings("org.relativitymc:modern-yarn-mappings-patch-neoforge:$project.yarn_mappings_patch_neoforge_version")
@@ -4000,7 +4000,7 @@ index 640d57ae..46ac5ee1 100644
          implementation "com.ibm.async:asyncutil:${async_util_version}"
  
          implementation platform("org.lwjgl:lwjgl-bom:${lwjgl_version}")
-@@ -58,7 +58,7 @@ allprojects {
+@@ -49,7 +53,7 @@ allprojects {
      processResources {
          inputs.property "version", version
  
@@ -4010,7 +4010,7 @@ index 640d57ae..46ac5ee1 100644
          }
      }
 diff --git a/tests/c2me-test/build.gradle b/tests/c2me-test/build.gradle
-index fe77428c..6b2d6e22 100644
+index 3670ad4b..6b2d6e22 100644
 --- a/tests/c2me-test/build.gradle
 +++ b/tests/c2me-test/build.gradle
 @@ -48,6 +48,8 @@ afterEvaluate {
@@ -4022,17 +4022,6 @@ index fe77428c..6b2d6e22 100644
          }
          onlyIf {
              !getRootProject().getProjectDir().toPath().relativize(project.getBuildDir().toPath()).resolve("testServer").toFile().isDirectory()
-@@ -58,8 +60,8 @@ afterEvaluate {
- }
- 
- dependencies {
--    runtimeOnly project(":tests:test-mod").sourceSets.main.output
--    runtimeOnly project(":").sourceSets.main.output
-+    runtimeOnly project(path: ":tests:test-mod", configuration: "namedElements")
-+    runtimeOnly project(path: ":", configuration: "namedElements")
- }
- 
- dependencies {
 diff --git a/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml b/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..5c62edb0
@@ -4217,14 +4206,14 @@ index e71383af..00000000
 -  ]
 -}
 diff --git a/tests/vanilla-test/build.gradle b/tests/vanilla-test/build.gradle
-index 1282fe8e..93c9b938 100644
+index 19faf4be..93c9b938 100644
 --- a/tests/vanilla-test/build.gradle
 +++ b/tests/vanilla-test/build.gradle
 @@ -41,7 +41,7 @@ afterEvaluate {
  }
  
  dependencies {
--    testmodImplementation project(":tests:test-mod").sourceSets.main.output
+-    testmodImplementation project(path: ":tests:test-mod", configuration: "namedElements")
 +    runtimeOnly project(path: ":tests:test-mod", configuration: "namedElements")
  }
  
