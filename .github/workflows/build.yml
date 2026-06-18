@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-java@v2
         with:
           distribution: 'zulu'
-          java-version: 23
+          java-version: 25
           java-package: jdk
 
       - name: Install LLVM
@@ -53,8 +53,8 @@ jobs:
       - name: upload to modrinth and curseforge
         run: |
           cd C2ME-fabric-patched
-          ./gradlew modrinth curseforge
-        if: github.ref == 'refs/heads/ver/1.21.1'
+          ./gradlew publishMods
+        if: false
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_UPLOAD_TOKEN }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_API_TOKEN }}
