@@ -156,7 +156,7 @@ index a22a1793..e224bb4d 100644
      stdout = stdout.toString().strip()
      def suffix = ""
 diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
-index bb1e3ea4..db270312 100644
+index bb1e3ea4..a092da0f 100644
 --- a/buildSrc/build.gradle
 +++ b/buildSrc/build.gradle
 @@ -10,6 +10,8 @@ repositories {
@@ -173,7 +173,7 @@ index bb1e3ea4..db270312 100644
      implementation 'com.google.code.gson:gson:2.13.2'
  
 -    implementation 'net.fabricmc.fabric-loom-remap:net.fabricmc.fabric-loom-remap.gradle.plugin:1.17-SNAPSHOT'
-+    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.0-alpha.29'
++    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.0-alpha.30'
 +//    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.local'
  }
  
