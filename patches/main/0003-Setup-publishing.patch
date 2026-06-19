@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Fri, 19 Jun 2026 16:13:20 +0800
+Subject: [PATCH] Setup publishing
+
+
+diff --git a/build.gradle b/build.gradle
+index 5777a717..d32b0674 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
+ 
+ publishMods {
+     changelog = ghaChangelog
+-    modLoaders.add("fabric")
++    modLoaders.add("neoforge")
+ 
+     def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
+     displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
+@@ -312,7 +312,7 @@ publishMods {
+         modrinth("modrinthMITPackage") {
+             from mrOptions
+             file = remapJar.archiveFile
+-            projectId = "VSNURh3q"
++            projectId = "COlSi5iR"
+         }
+     }
+ }
