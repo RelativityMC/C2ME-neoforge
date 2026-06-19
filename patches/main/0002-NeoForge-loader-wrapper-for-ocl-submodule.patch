@@ -4,6 +4,19 @@ Date: Fri, 19 Jun 2026 00:54:12 +0800
 Subject: [PATCH] NeoForge loader wrapper for ocl submodule
 
 
+diff --git a/build.gradle b/build.gradle
+index e224bb4d..5777a717 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,7 +1,7 @@
+ plugins {
+     id 'java-library'
+     id "me.champeau.jmh" version "0.7.2"
+-    id 'com.gradleup.shadow' version '8.3.0' apply false
++    id 'com.gradleup.shadow' version '9.4.2' apply false
+     id 'io.github.tomtzook.gradle-cmake' version '1.2.2' apply false
+     id 'dev.yumi.gradle.licenser' version '4.0.0' apply false
+     id 'me.modmuss50.mod-publish-plugin' version "2.0.0-beta.2" apply false
 diff --git a/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessNestedJarsAction.java b/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessNestedJarsAction.java
 new file mode 100644
 index 00000000..f4341392
@@ -118,10 +131,10 @@ index 00000000..f4341392
 +	}
 +}
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
-index 368e98af..0420087b 100644
+index 368e98af..a7688251 100644
 --- a/c2me-opts-accel-opencl/build.gradle
 +++ b/c2me-opts-accel-opencl/build.gradle
-@@ -9,6 +9,13 @@ java {
+@@ -9,6 +9,17 @@ java {
      targetCompatibility = JavaVersion.VERSION_25
  }
  
@@ -132,13 +145,23 @@ index 368e98af..0420087b 100644
 +    }
 +}
 +
++configurations {
++    wrapperShadowInclude
++}
++
  dependencies {
      include implementation(platform("org.lwjgl:lwjgl-bom:${lwjgl_version}"))
      include implementation("org.lwjgl:lwjgl")
-@@ -26,3 +33,51 @@ dependencies {
+@@ -25,4 +36,71 @@ dependencies {
+     include runtimeOnly("org.lwjgl:lwjgl::natives-macos-arm64")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-linux")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-windows")
- }
++
++    // Source: https://mvnrepository.com/artifact/com.google.jimfs/jimfs
++    wrapperShadowInclude(wrapperImplementation('com.google.jimfs:jimfs:1.3.1')) {
++        transitive = false
++    }
++}
 +
 +com.ishland.c2me.gradle.PostProcessNestedJarsAction.addToTask(tasks.named("processIncludeJars"))
 +
@@ -162,11 +185,25 @@ index 368e98af..0420087b 100644
 +    }
 +}
 +
-+def wrapperJar = tasks.register("wrapperJar", Jar) {
++//def wrapperJar = tasks.register("wrapperJar", Jar) {
++//    archiveClassifier = "dev"
++//    from(sourceSets.wrapper.output)
++//    dependsOn(wrapperClasses)
++//    isPreserveFileTimestamps = false
++//    isReproducibleFileOrder = true
++//}
++
++def wrapperJar = tasks.register("wrapperJar", com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
 +    archiveClassifier = "dev"
 +    from(sourceSets.wrapper.output)
 +    dependsOn(wrapperClasses)
-+}
++
++    configurations = [ project.configurations.wrapperShadowInclude ]
++
++    relocate 'com.google.common.jimfs', 'com.ishland.c2me.opts.accel.opencl.wrapper.deps.jimfs'
++
++    mergeServiceFiles()
+ }
 +
 +def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.RemapJarTask) {
 +    input = wrapperJar.map { it.archiveFile.get() }
@@ -187,12 +224,12 @@ index 368e98af..0420087b 100644
 +}
 +
 +assemble.dependsOn(remapWrapperJar)
-diff --git a/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/SidedDependencyLocator.java b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/SidedDependencyLocator.java
+diff --git a/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java
 new file mode 100644
-index 00000000..65b8d5d7
+index 00000000..c4c60aaa
 --- /dev/null
-+++ b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/SidedDependencyLocator.java
-@@ -0,0 +1,123 @@
++++ b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java
+@@ -0,0 +1,145 @@
 +/*
 + * All Rights Reserved
 + *
@@ -212,92 +249,109 @@ index 00000000..65b8d5d7
 +package com.ishland.c2me.opts.accel.opencl.wrapper;
 +
 +import com.electronwill.nightconfig.core.Config;
++import com.google.common.jimfs.Configuration;
++import com.google.common.jimfs.Jimfs;
 +import com.google.gson.Gson;
 +import com.google.gson.GsonBuilder;
 +import com.google.gson.JsonElement;
 +import com.google.gson.JsonObject;
 +import com.mojang.logging.LogUtils;
++import cpw.mods.jarhandling.JarContentsBuilder;
 +import cpw.mods.jarhandling.SecureJar;
 +import net.neoforged.api.distmarker.Dist;
 +import net.neoforged.fml.loading.FMLLoader;
++import net.neoforged.fml.loading.LogMarkers;
 +import net.neoforged.fml.loading.moddiscovery.ModFile;
 +import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
 +import net.neoforged.fml.loading.moddiscovery.NightConfigWrapper;
-+import net.neoforged.fml.loading.moddiscovery.locators.JarInJarDependencyLocator;
 +import net.neoforged.jarjar.selection.util.Constants;
++import net.neoforged.neoforgespi.ILaunchContext;
 +import net.neoforged.neoforgespi.language.IModFileInfo;
-+import net.neoforged.neoforgespi.locating.IDependencyLocator;
 +import net.neoforged.neoforgespi.locating.IDiscoveryPipeline;
 +import net.neoforged.neoforgespi.locating.IModFile;
++import net.neoforged.neoforgespi.locating.IModFileCandidateLocator;
++import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 +import org.slf4j.Logger;
 +
-+import java.io.ByteArrayInputStream;
-+import java.io.IOException;
-+import java.io.InputStream;
-+import java.io.InputStreamReader;
-+import java.io.UncheckedIOException;
-+import java.nio.charset.StandardCharsets;
++import java.io.BufferedReader;
++import java.io.BufferedWriter;
++import java.nio.file.FileSystem;
++import java.nio.file.Files;
 +import java.nio.file.Path;
-+import java.nio.file.Paths;
++import java.nio.file.StandardOpenOption;
 +import java.util.Iterator;
 +import java.util.List;
-+import java.util.Optional;
 +
-+public class SidedDependencyLocator extends JarInJarDependencyLocator implements IDependencyLocator {
++public class ModWrapper implements IModFileCandidateLocator {
++    private static final Logger LOGGER = LogUtils.getLogger();
++
 +    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 +
 +    @Override
-+    public void scanMods(List<IModFile> loadedMods, IDiscoveryPipeline pipeline) {
++    public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
 +        try {
-+            SecureJar secureJar = SecureJar.from(Path.of(SidedDependencyLocator.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
-+            IModFile iModFile = IModFile.create(secureJar, SidedDependencyLocator::buildOuterFileInfo);
-+            super.scanMods(List.of(iModFile), pipeline);
++            LOGGER.debug(LogMarkers.SCAN, "Building overlayfs for JarJar filtering");
++
++            FileSystem upperFs = Jimfs.newFileSystem(Configuration.unix());
++            Path currentJar = Path.of(ModWrapper.class.getProtectionDomain().getCodeSource().getLocation().toURI());
++
++            JsonObject json;
++
++            try (BufferedReader reader = Files.newBufferedReader(currentJar.resolve(Constants.CONTAINED_JARS_METADATA_PATH))) {
++                json = GSON.fromJson(reader, JsonObject.class);
++            }
++
++            if (FMLLoader.getDist() == Dist.CLIENT) {
++                for (Iterator<JsonElement> iterator = json.get("jars").getAsJsonArray().iterator(); iterator.hasNext(); ) {
++                    JsonObject jar = iterator.next().getAsJsonObject();
++                    JsonElement identifier = jar.get("identifier");
++                    if (identifier != null) {
++                        JsonElement groupElement = identifier.getAsJsonObject().get("group");
++                        JsonElement artifactElement = identifier.getAsJsonObject().get("artifact");
++                        if (groupElement != null && artifactElement != null) {
++                            // neo-loom uses "artifact:classifier" in place of artifact, because the spec is broken and I have to do this dumpster fire
++                            if (groupElement.getAsString().equals("org.lwjgl") && (artifactElement.getAsString().equals("lwjgl") || artifactElement.getAsString().startsWith("lwjgl:"))) {
++                                LOGGER.debug(LogMarkers.SCAN, "Removing {}", identifier);
++                                iterator.remove();
++                                continue;
++                            }
++
++                            if (groupElement.getAsString().equals("org.apache.commons") && artifactElement.getAsString().equals("commons-compress")) {
++                                LOGGER.debug(LogMarkers.SCAN, "Removing {}", identifier);
++                                iterator.remove();
++                                continue;
++                            }
++                        }
++                    }
++                }
++            }
++
++            Path lowerRoot = upperFs.getPath("/lower_overlay");
++            Files.createDirectories(lowerRoot);
++
++            Path upperRoot = upperFs.getPath("/upper_overlay");
++            Path upperMetadataPath = upperRoot.resolve(Constants.CONTAINED_JARS_METADATA_PATH);
++            Files.createDirectories(upperMetadataPath.getParent());
++            try (BufferedWriter writer = Files.newBufferedWriter(upperMetadataPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
++                GSON.toJson(json, writer);
++            }
++
++            SecureJar secureJar = SecureJar.from(
++                    new JarContentsBuilder()
++                            .paths(lowerRoot, currentJar, upperRoot) // lower to upper
++                            .pathFilter((entry, basePath) -> !entry.startsWith("com/ishland/c2me/opts/accel/opencl"))
++                            .build()
++            );
++            IModFile iModFile = IModFile.create(
++                    secureJar,
++                    ModWrapper::buildOuterFileInfo,
++                    IModFile.Type.LIBRARY,
++                    ModFileDiscoveryAttributes.DEFAULT.withLocator(this)
++            );
++            pipeline.addModFile(iModFile);
 +        } catch (Throwable t) {
 +            throw new RuntimeException("Loading C2ME OpenCL mod", t);
 +        }
-+    }
-+
-+    @Override
-+    protected Optional<InputStream> loadResourceFromModFile(IModFile modFile, Path path) {
-+        Optional<InputStream> stream = super.loadResourceFromModFile(modFile, path);
-+
-+        if (FMLLoader.getDist() == Dist.CLIENT && path.equals(Paths.get(Constants.CONTAINED_JARS_METADATA_PATH))) {
-+            return stream
-+                    .map(orig -> {
-+                        JsonObject json;
-+
-+                        try (var reader = new InputStreamReader(orig)) {
-+                            json = GSON.fromJson(reader, JsonObject.class);
-+                        } catch (IOException e) {
-+                            throw new UncheckedIOException(e);
-+                        }
-+
-+                        for (Iterator<JsonElement> iterator = json.get("jars").getAsJsonArray().iterator(); iterator.hasNext(); ) {
-+                            JsonObject jar = iterator.next().getAsJsonObject();
-+                            JsonElement identifier = jar.get("identifier");
-+                            if (identifier != null) {
-+                                JsonElement groupElement = identifier.getAsJsonObject().get("group");
-+                                JsonElement artifactElement = identifier.getAsJsonObject().get("artifact");
-+                                if (groupElement != null && artifactElement != null) {
-+                                    // neo-loom uses "artifact:classifier" in place of artifact, because the spec is broken and I have to do this dumpster fire
-+                                    if (groupElement.getAsString().equals("org.lwjgl") && (artifactElement.getAsString().equals("lwjgl") || artifactElement.getAsString().startsWith("lwjgl:"))) {
-+                                        iterator.remove();
-+                                        continue;
-+                                    }
-+
-+                                    if (groupElement.getAsString().equals("org.apache.commons") && artifactElement.getAsString().equals("commons-compress")) {
-+                                        iterator.remove();
-+                                        continue;
-+                                    }
-+                                }
-+                            }
-+                        }
-+
-+                        return new ByteArrayInputStream(GSON.toJson(json).getBytes(StandardCharsets.UTF_8));
-+                    });
-+        }
-+
-+        return stream;
 +    }
 +
 +    public static IModFileInfo buildOuterFileInfo(IModFile iModFile) {
@@ -315,12 +369,17 @@ index 00000000..65b8d5d7
 +        NightConfigWrapper configWrapper = new NightConfigWrapper(conf);
 +        return new ModFileInfo(modFile, configWrapper, configWrapper::setFile, List.of());
 +    }
++
++    @Override
++    public String toString() {
++        return "c2me_opts_accel_opencl_wrapper";
++    }
 +}
-diff --git a/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IDependencyLocator b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IDependencyLocator
+diff --git a/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator
 new file mode 100644
-index 00000000..03e38ac1
+index 00000000..2ff58de4
 --- /dev/null
-+++ b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IDependencyLocator
++++ b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator
 @@ -0,0 +1 @@
-+com.ishland.c2me.opts.accel.opencl.wrapper.SidedDependencyLocator
++com.ishland.c2me.opts.accel.opencl.wrapper.ModWrapper
 \ No newline at end of file

@@ -1798,13 +1798,13 @@ index 08b8e676..00000000
 -}
 diff --git a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..49a9373c
+index 00000000..f70f1bbf
 --- /dev/null
 +++ b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,54 @@
 +modLoader="javafml"
 +loaderVersion="*"
-+license="MIT"
++license="All-Rights-Reserved"
 +issueTrackerURL="https://github.com/RelativityMC/C2ME-neoforge/issues"
 +clientSideOnly = false
 +showAsResourcePack = false
