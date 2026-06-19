@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 5777a717..d32b0674 100644
+index ee9423b2..0a2c70a6 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
@@ -17,7 +17,7 @@ index 5777a717..d32b0674 100644
  
      def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
      displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
-@@ -312,7 +312,7 @@ publishMods {
+@@ -313,7 +313,7 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile

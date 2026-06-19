@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index a22a1793..e224bb4d 100644
+index 8d2c502e..ee9423b2 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,8 +1,6 @@
@@ -14,7 +14,7 @@ index a22a1793..e224bb4d 100644
      id "me.champeau.jmh" version "0.7.2"
 -    id 'com.modrinth.minotaur' version '2.+' apply false
 -    id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
-     id 'com.gradleup.shadow' version '8.3.0' apply false
+     id 'com.gradleup.shadow' version '9.4.2' apply false
      id 'io.github.tomtzook.gradle-cmake' version '1.2.2' apply false
      id 'dev.yumi.gradle.licenser' version '4.0.0' apply false
 @@ -57,7 +55,7 @@ configure(allprojects) {
@@ -125,7 +125,7 @@ index a22a1793..e224bb4d 100644
      }
  
      test {
-@@ -319,15 +320,13 @@ publishMods {
+@@ -320,15 +321,13 @@ publishMods {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -147,7 +147,7 @@ index a22a1793..e224bb4d 100644
          }
      }
  }
-@@ -336,6 +335,7 @@ String getVersionSuffix() {
+@@ -337,6 +336,7 @@ String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
          workingDir = project.file("..")
