@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index fb07d90d..19c4cc20 100644
+index fb07d90d..a9af7b53 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
@@ -26,3 +26,12 @@ index fb07d90d..19c4cc20 100644
          }
  
          modrinth("modrinthOpenCLAccel") {
+@@ -329,7 +329,7 @@ publishMods {
+             file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
+             projectId = "qtPMklut"
+             requires {
+-                id = "VSNURh3q"
++                id = "COlSi5iR"
+             }
+             requires {
+                 id = "Ps1zyz6x"
