@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index ee9423b2..0a2c70a6 100644
+index fb07d90d..19c4cc20 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
@@ -16,13 +16,13 @@ index ee9423b2..0a2c70a6 100644
 +    modLoaders.add("neoforge")
  
      def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
-     displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
-@@ -313,7 +313,7 @@ publishMods {
+     displayName = envDisplayName != null ? envDisplayName : (project.version + " backport devbuild for " + project.minecraft_version)
+@@ -321,7 +321,7 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile
 -            projectId = "VSNURh3q"
 +            projectId = "COlSi5iR"
          }
-     }
- }
+ 
+         modrinth("modrinthOpenCLAccel") {
