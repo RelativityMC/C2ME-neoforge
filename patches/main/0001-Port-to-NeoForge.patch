@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index bdc8bd07..7f9e3b2d 100644
+index 74ab2006..532fbb6f 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -57,7 +57,7 @@ configure(allprojects) {
@@ -108,7 +108,7 @@ index bdc8bd07..7f9e3b2d 100644
      }
  
      test {
-@@ -341,6 +336,7 @@ dependencies {
+@@ -361,6 +356,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
@@ -1815,6 +1815,33 @@ index 08b8e676..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java b/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
+index ef0801f8..c8b80648 100644
+--- a/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
++++ b/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
+@@ -16,12 +16,12 @@
+ 
+ package com.ishland.c2me.opts.accel.opencl.common.integration.zfastnoise;
+ 
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.block.BlockState;
+ import net.minecraft.util.collection.BoundedRegionArray;
+ import net.minecraft.util.math.ChunkPos;
+ import net.minecraft.world.chunk.ProtoChunk;
+ import net.minecraft.world.gen.chunk.ChunkGeneratorSettings;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -37,7 +37,7 @@ public class ZFastNoiseBindings {
+     public static final MethodHandle MH_FastCopyBufferDataIntoChunks$copyData;
+ 
+     static {
+-        if (FabricLoader.getInstance().isModLoaded("zfastnoise")) {
++        if (FMLLoader.getCurrent().getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("zfastnoise"))) {
+             MethodHandle mh_FastCopyBufferDataIntoChunks$copyData;
+ 
+             try {
 diff --git a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..447328bb
