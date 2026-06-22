@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Mon, 22 Jun 2026 18:18:25 +0800
+Subject: [PATCH] fix: enable delayFullChunkEvents
+
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index a5e77df5..9e1089da 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -134,7 +134,7 @@ public class Config {
+                     Enabling this will almost certainly break vanilla behavior, disabled by default on fabric
+                     Do not change this unless you know what you are doing
+                     """)
+-            .getBoolean(false, false);
++            .getBoolean(true, false);
+ 
+     public static void init() {
+         // intentionally empty
