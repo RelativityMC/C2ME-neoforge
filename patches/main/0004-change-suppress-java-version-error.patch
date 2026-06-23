@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Fri, 7 Mar 2025 22:08:30 +0800
+Subject: [PATCH] change: suppress java version error
+
+
+diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
+index b09f4042..7c9ba8ff 100644
+--- a/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
++++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/ModuleMixinPlugin.java
+@@ -58,9 +58,12 @@ public class ModuleMixinPlugin implements IMixinConfigPlugin {
+                 LOGGER.warn("Unable to detect enabled state for module entrypoint: {}", targetClass, t);
+             }
+         } catch (Throwable t) {
+-            LOGGER.warn("Error loading module entrypoint: {}", targetClass, t);
+             if (t instanceof UnsupportedClassVersionError) {
++                LOGGER.debug("Error loading module entrypoint: {}", targetClass, t);
++                LOGGER.warn("Disabling {} due to incompatible Java version, see debug logs for details", mixinPackage);
+                 isEnabled = false;
++            } else {
++                LOGGER.warn("Error loading module entrypoint: {}", targetClass, t);
+             }
+         }
+         if (!isEnabled) {
