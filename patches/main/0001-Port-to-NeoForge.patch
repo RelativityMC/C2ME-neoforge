@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 4dca8d7e..fb07d90d 100644
+index d004afb0..32d74a5c 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,8 +1,6 @@
@@ -1057,10 +1057,10 @@ index 9746c532..18972238 100644
  
 diff --git a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..c98ae3d9
+index 00000000..2289abcf
 --- /dev/null
 +++ b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,37 @@
 +modLoader="javafml"
 +loaderVersion="*"
 +license="MIT"
@@ -1080,6 +1080,9 @@ index 00000000..c98ae3d9
 +
 +[[mixins]]
 +config="c2me-client-uncapvd.mixins.json"
++
++[modproperties.c2me_client_uncapvd]
++"sodium:config_api_user" = "com.ishland.c2me.client.uncapvd.common.SodiumConfigBuilder"
 +
 +[[dependencies.c2me_client_uncapvd]]
 +modId = "minecraft"
