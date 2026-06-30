@@ -5,7 +5,7 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index fb07d90d..19dbbab2 100644
+index 48cf2b81..6d45521e 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
@@ -26,7 +26,7 @@ index fb07d90d..19dbbab2 100644
              projectId = "1563823"
              requires("c2me")
              requires("scalablelux")
-@@ -321,15 +321,15 @@ publishMods {
+@@ -322,15 +322,15 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile

@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index d004afb0..32d74a5c 100644
+index 0393d0a6..48cf2b81 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,8 +1,6 @@
@@ -125,7 +125,7 @@ index d004afb0..32d74a5c 100644
      }
  
      test {
-@@ -340,15 +341,13 @@ publishMods {
+@@ -341,15 +342,13 @@ publishMods {
  subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -147,7 +147,7 @@ index d004afb0..32d74a5c 100644
          }
      }
  }
-@@ -357,6 +356,7 @@ String getVersionSuffix() {
+@@ -358,6 +357,7 @@ String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
          workingDir = project.file("..")
@@ -156,7 +156,7 @@ index d004afb0..32d74a5c 100644
      stdout = stdout.toString().strip()
      def suffix = ""
 diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
-index bb1e3ea4..a092da0f 100644
+index bb1e3ea4..fc49bb17 100644
 --- a/buildSrc/build.gradle
 +++ b/buildSrc/build.gradle
 @@ -10,6 +10,8 @@ repositories {
@@ -173,7 +173,7 @@ index bb1e3ea4..a092da0f 100644
      implementation 'com.google.code.gson:gson:2.13.2'
  
 -    implementation 'net.fabricmc.fabric-loom-remap:net.fabricmc.fabric-loom-remap.gradle.plugin:1.17-SNAPSHOT'
-+    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.0-alpha.30'
++    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17-SNAPSHOT'
 +//    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.local'
  }
  
@@ -2332,10 +2332,56 @@ index 6cbb0314..a967fb59 100644
 +        ])
 +    }
 +}
-diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertParser.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertParser.java
-index 494599c0..5d5ba93d 100644
---- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertParser.java
-+++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertParser.java
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
+index 4220ecdb..3161e58b 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
+@@ -28,8 +28,8 @@ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.McToAst;
+ import com.ishland.c2me.opts.dfc.common.ast.binary.MaxNode;
+ import com.ishland.c2me.opts.dfc.common.ast.binary.MinNode;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -54,7 +54,7 @@ public class ConfigClampBindings {
+         MethodHandle mh_max = null;
+         boolean available = false;
+ 
+-        if (FabricLoader.getInstance().isModLoaded("tectonic")) {
++        if (FMLLoader.getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("tectonic"))) {
+             try {
+                 class_ConfigClamp = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigClamp");
+                 mh_input = MethodHandles.lookup().findVirtual(class_ConfigClamp, "input", MethodType.methodType(DensityFunction.class));
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
+index 542bc1cd..7e431e8c 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
+@@ -33,8 +33,8 @@ import com.ishland.c2me.opts.dfc.common.ast.binary.MulNode;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantNode;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.CoordinateNode;
+ import com.ishland.c2me.opts.dfc.common.ast.noise.GenericShiftedNoiseNode;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -67,7 +67,7 @@ public class ConfigNoiseBindings {
+         MethodHandle mh_smootherScaling = null;
+         boolean available = false;
+ 
+-        if (FabricLoader.getInstance().isModLoaded("tectonic")) {
++        if (FMLLoader.getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("tectonic"))) {
+             try {
+                 class_ConfigNoise = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigNoise");
+                 mh_noise = MethodHandles.lookup().findVirtual(class_ConfigNoise, "noise", MethodType.methodType(DensityFunction.Noise.class));
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertBindings.java
+index 9c120e3e..a76b5784 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertBindings.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/TectonicInvertBindings.java
 @@ -28,8 +28,8 @@ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
  import com.ishland.c2me.opts.dfc.common.ast.McToAst;
  import com.ishland.c2me.opts.dfc.common.ast.binary.DivNode;
@@ -2346,7 +2392,7 @@ index 494599c0..5d5ba93d 100644
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
  
-@@ -50,7 +50,7 @@ public class TectonicInvertParser {
+@@ -50,7 +50,7 @@ public class TectonicInvertBindings {
          MethodHandle mh_input = null;
          boolean available = false;
  
