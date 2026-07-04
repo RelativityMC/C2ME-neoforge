@@ -1,0 +1,651 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Fri, 19 Jun 2026 00:54:12 +0800
+Subject: [PATCH] NeoForge loader wrapper for ocl submodule
+
+
+diff --git a/build.gradle b/build.gradle
+index d4705450..6e3f7146 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,8 +1,6 @@
+ plugins {
+     id 'java-library'
+     id "me.champeau.jmh" version "0.7.2"
+-    id 'com.modrinth.minotaur' version '2.+' apply false
+-    id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
+     id 'com.gradleup.shadow' version '9.4.2' apply false
+     id 'io.github.tomtzook.gradle-cmake' version '1.2.2' apply false
+     id 'dev.yumi.gradle.licenser' version '4.0.0' apply false
+diff --git a/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessNestedJarsAction.java b/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessNestedJarsAction.java
+new file mode 100644
+index 00000000..5f5b543b
+--- /dev/null
++++ b/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessNestedJarsAction.java
+@@ -0,0 +1,121 @@
++/*
++ * This file is part of fabric-loom, licensed under the MIT License (MIT).
++ *
++ * Copyright (c) 2016-2021 FabricMC
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in all
++ * copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ */
++
++package com.ishland.c2me.gradle;
++
++import net.fabricmc.loom.build.nesting.NestableJarGenerationTask;
++import net.fabricmc.loom.util.FileSystemUtil;
++import org.gradle.api.Action;
++import org.gradle.api.Task;
++import org.gradle.api.file.ConfigurableFileCollection;
++import org.gradle.api.model.ObjectFactory;
++import org.gradle.api.tasks.TaskProvider;
++import org.gradle.workers.WorkAction;
++import org.gradle.workers.WorkParameters;
++import org.gradle.workers.WorkQueue;
++import org.gradle.workers.WorkerExecutor;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import javax.inject.Inject;
++import java.io.File;
++import java.io.IOException;
++import java.io.Serializable;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.Iterator;
++import java.util.Set;
++
++/**
++ * Configuration-cache-compatible action for nesting jars.
++ * Uses a FileCollection to avoid capturing task references at configuration time.
++ * Do NOT turn me into a record!
++ */
++public abstract class PostProcessNestedJarsAction implements Action<Task>, Serializable {
++
++	@Inject
++	protected abstract WorkerExecutor getWorkerExecutor();
++
++	@Inject
++	protected abstract ObjectFactory getObjectFactory();
++
++	public static void addToTask(NestableJarGenerationTask task) {
++		PostProcessNestedJarsAction postProcessNestedJarsAction = task.getProject().getObjects().newInstance(PostProcessNestedJarsAction.class);
++		task.doLast(postProcessNestedJarsAction);
++	}
++
++	public static void addToTask(TaskProvider<NestableJarGenerationTask> provider) {
++		provider.configure(PostProcessNestedJarsAction::addToTask);
++	}
++
++	@Override
++	public void execute(Task t) {
++		final NestableJarGenerationTask generationTask = (NestableJarGenerationTask) t;
++
++		final WorkQueue workQueue = getWorkerExecutor().noIsolation();
++
++		workQueue.submit(ProcessAction.class, p -> {
++			p.getJars().setFrom(
++					getObjectFactory().fileTree().setDir(generationTask.getOutputDirectory())
++							.matching(pattern -> pattern.include("*.jar"))
++			);
++		});
++	}
++
++	public interface ProcessParameters extends WorkParameters {
++		ConfigurableFileCollection getJars();
++	}
++
++	public abstract static class ProcessAction implements WorkAction<ProcessParameters> {
++		private static final Logger LOGGER = LoggerFactory.getLogger(PostProcessNestedJarsAction.class);
++
++		@Override
++		public void execute() {
++			final Set<File> jars = getParameters().getJars().getFiles();
++
++			if (!jars.isEmpty()) {
++				for (File jar : jars) {
++					try (FileSystemUtil.Delegate fs = FileSystemUtil.getJarFileSystem(jar, false)) {
++						Iterator<Path> iterator = Files.walk(fs.getRoot()).iterator();
++
++						while (iterator.hasNext()) {
++							Path path = iterator.next();
++
++							Path fileName = path.getFileName();
++							if (fileName != null && fileName.toString().equals("module-info.class")) {
++								Files.delete(path);
++							}
++						}
++
++//						Files.deleteIfExists(fs.getRoot().resolve("META-INF/versions/9/module-info.class"));
++//						Files.deleteIfExists(fs.getRoot().resolve("META-INF/versions/11/module-info.class"));
++					} catch (IOException e) {
++                        throw new UncheckedIOException(e);
++                    }
++                }
++			}
++		}
++	}
++}
+diff --git a/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessWrapperJarAction.java b/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessWrapperJarAction.java
+new file mode 100644
+index 00000000..198a618e
+--- /dev/null
++++ b/buildSrc/src/main/java/com/ishland/c2me/gradle/PostProcessWrapperJarAction.java
+@@ -0,0 +1,100 @@
++/*
++ * This file is part of fabric-loom, licensed under the MIT License (MIT).
++ *
++ * Copyright (c) 2016-2021 FabricMC
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in all
++ * copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ */
++
++package com.ishland.c2me.gradle;
++
++import net.fabricmc.loom.util.FileSystemUtil;
++import org.gradle.api.Action;
++import org.gradle.api.Task;
++import org.gradle.api.file.RegularFileProperty;
++import org.gradle.api.model.ObjectFactory;
++import org.gradle.api.tasks.TaskProvider;
++import org.gradle.jvm.tasks.Jar;
++import org.gradle.workers.WorkAction;
++import org.gradle.workers.WorkParameters;
++import org.gradle.workers.WorkQueue;
++import org.gradle.workers.WorkerExecutor;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import javax.inject.Inject;
++import java.io.File;
++import java.io.IOException;
++import java.io.Serializable;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.StandardCopyOption;
++
++/**
++ * Configuration-cache-compatible action for nesting jars.
++ * Uses a FileCollection to avoid capturing task references at configuration time.
++ * Do NOT turn me into a record!
++ */
++public abstract class PostProcessWrapperJarAction implements Action<Task>, Serializable {
++
++	@Inject
++	protected abstract WorkerExecutor getWorkerExecutor();
++
++	@Inject
++	protected abstract ObjectFactory getObjectFactory();
++
++	public static void addToTask(Jar task) {
++		PostProcessWrapperJarAction postProcessNestedJarsAction = task.getProject().getObjects().newInstance(PostProcessWrapperJarAction.class);
++		task.doLast(postProcessNestedJarsAction);
++	}
++
++	public static void addToTask(TaskProvider<Jar> provider) {
++		provider.configure(PostProcessWrapperJarAction::addToTask);
++	}
++
++	@Override
++	public void execute(Task t) {
++		final Jar jar = (Jar) t;
++
++		final WorkQueue workQueue = getWorkerExecutor().noIsolation();
++
++		workQueue.submit(ProcessAction.class, p -> {
++			p.getJar().set(jar.getArchiveFile());
++		});
++	}
++
++	public interface ProcessParameters extends WorkParameters {
++		RegularFileProperty getJar();
++	}
++
++	public abstract static class ProcessAction implements WorkAction<ProcessParameters> {
++		private static final Logger LOGGER = LoggerFactory.getLogger(PostProcessWrapperJarAction.class);
++
++		@Override
++		public void execute() {
++			File zip = getParameters().getJar().get().getAsFile();
++
++			try (FileSystemUtil.Delegate fs = FileSystemUtil.getJarFileSystem(zip, true)) {
++				Files.move(fs.getRoot().resolve("META-INF/jarjar/metadata.json"), fs.getRoot().resolve("META-INF/jarjar/metadata.json.1"), StandardCopyOption.COPY_ATTRIBUTES);
++			} catch (IOException e) {
++                throw new UncheckedIOException(e);
++            }
++        }
++	}
++}
+diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
+index 72c8d8f9..59fe1a22 100644
+--- a/c2me-opts-accel-opencl/build.gradle
++++ b/c2me-opts-accel-opencl/build.gradle
+@@ -4,6 +4,17 @@ moduleDependencies(project, [
+         "c2me-rewrites-chunk-system",
+ ])
+ 
++sourceSets {
++    wrapper {
++        compileClasspath += sourceSets.main.compileClasspath
++        runtimeClasspath += sourceSets.main.runtimeClasspath
++    }
++}
++
++configurations {
++    wrapperShadowInclude
++}
++
+ dependencies {
+     include implementation(platform("org.lwjgl:lwjgl-bom:${lwjgl_version}"))
+     include implementation("org.lwjgl:lwjgl:${lwjgl_version}:unsafe")
+@@ -20,4 +31,73 @@ dependencies {
+     include runtimeOnly("org.lwjgl:lwjgl::natives-macos-arm64")
+     include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-linux")
+     include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-windows")
++
++//    // Source: https://mvnrepository.com/artifact/com.google.jimfs/jimfs
++//    wrapperShadowInclude(wrapperImplementation('com.google.jimfs:jimfs:1.3.1')) {
++//        transitive = false
++//    }
++}
++
++com.ishland.c2me.gradle.PostProcessNestedJarsAction.addToTask(tasks.named("processIncludeJars"))
++
++jar {
++    archiveClassifier = "mod-dev"
++}
++
++remapJar {
++    addNestedDependencies = false
++    archiveClassifier = "mod"
++    entryCompression = ZipEntryCompression.STORED
++
++    def metadata = "{\"group\":\"${project.group}\",\"name\":\"${project.name}\",\"version\":\"${project.version}\",\"classifier\":\"\"}"
++
++    doLast {
++        net.fabricmc.loom.util.ZipUtils.add(
++                remapJar.archiveFile.get().getAsFile().toPath(),
++                "META-INF/neo-loom-nesting-metadata.json",
++                metadata
++        )
++    }
+ }
++
++//def wrapperJar = tasks.register("wrapperJar", Jar) {
++//    archiveClassifier = "dev"
++//    from(sourceSets.wrapper.output)
++//    dependsOn(wrapperClasses)
++//    isPreserveFileTimestamps = false
++//    isReproducibleFileOrder = true
++//}
++
++def wrapperJar = tasks.register("wrapperJar", com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
++    archiveClassifier = "dev"
++    from(sourceSets.wrapper.output)
++    dependsOn(wrapperClasses)
++
++    configurations = [ project.configurations.wrapperShadowInclude ]
++
++    relocate 'com.google.common.jimfs', 'com.ishland.c2me.opts.accel.opencl.wrapper.deps.jimfs'
++
++    mergeServiceFiles()
++}
++
++def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.RemapJarTask) {
++    input = wrapperJar.map { it.archiveFile.get() }
++    dependsOn(wrapperJar)
++
++    nestedJars.from(remapJar.archiveFile)
++    nestedJars.builtBy(remapJar)
++    dependsOn(remapJar)
++
++    def processIncludeJars = tasks.named("processIncludeJars", net.fabricmc.loom.build.nesting.NestableJarGenerationTask)
++    nestedJars.from(
++            fileTree(processIncludeJars.flatMap { it.outputDirectory }).matching { it.include("*.jar") }
++    )
++    nestedJars.builtBy(processIncludeJars)
++    dependsOn(processIncludeJars)
++
++    addNestedDependencies = true
++}
++
++com.ishland.c2me.gradle.PostProcessWrapperJarAction.addToTask(remapWrapperJar)
++
++assemble.dependsOn(remapWrapperJar)
+diff --git a/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java
+new file mode 100644
+index 00000000..c942605f
+--- /dev/null
++++ b/c2me-opts-accel-opencl/src/wrapper/java/com/ishland/c2me/opts/accel/opencl/wrapper/ModWrapper.java
+@@ -0,0 +1,289 @@
++/*
++ * All Rights Reserved
++ *
++ * Copyright (c) 2025-2026 ishland
++ *
++ * All rights reserved. Do not redistribute.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++ * THE SOFTWARE.
++ */
++
++package com.ishland.c2me.opts.accel.opencl.wrapper;
++
++import com.electronwill.nightconfig.core.Config;
++import com.google.gson.Gson;
++import com.google.gson.GsonBuilder;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++import com.mojang.logging.LogUtils;
++import net.neoforged.api.distmarker.Dist;
++import net.neoforged.fml.jarcontents.JarContents;
++import net.neoforged.fml.loading.FMLLoader;
++import net.neoforged.fml.loading.FMLPaths;
++import net.neoforged.fml.loading.LogMarkers;
++import net.neoforged.fml.loading.moddiscovery.ModFile;
++import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
++import net.neoforged.fml.loading.moddiscovery.NightConfigWrapper;
++import net.neoforged.fml.loading.moddiscovery.readers.JarModsDotTomlModFileReader;
++import net.neoforged.fml.util.PathPrettyPrinting;
++import net.neoforged.neoforgespi.ILaunchContext;
++import net.neoforged.neoforgespi.language.IModFileInfo;
++import net.neoforged.neoforgespi.locating.IDiscoveryPipeline;
++import net.neoforged.neoforgespi.locating.IModFile;
++import net.neoforged.neoforgespi.locating.IModFileCandidateLocator;
++import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
++import net.neoforged.neoforgespi.locating.ModFileLoadingException;
++import org.slf4j.Logger;
++
++import java.io.BufferedReader;
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.io.UncheckedIOException;
++import java.net.URI;
++import java.net.URISyntaxException;
++import java.nio.file.AtomicMoveNotSupportedException;
++import java.nio.file.FileSystems;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.StandardCopyOption;
++import java.security.DigestOutputStream;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.HexFormat;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Objects;
++
++public class ModWrapper implements IModFileCandidateLocator {
++    private static final Logger LOGGER = LogUtils.getLogger();
++
++//    private static final boolean FORCE_TEMP_FILE = Boolean.getBoolean("com.ishland.c2me.opts.accel.opencl.wrapper.forceTempFile");
++    private static final String CLOBBERED_METADATA_PATH = "META-INF/jarjar/metadata.json.1";
++
++    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
++
++    @Override
++    public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
++        try {
++            LOGGER.info(LogMarkers.LOADING, "Building overlayfs for JarJar filtering");
++
++//            // reflect the FML
++//            List<ModFile> earlyServicesJars = null;
++//            if (!FORCE_TEMP_FILE) {
++//                try {
++//                    Field earlyServicesJarsField = FMLLoader.class.getDeclaredField("earlyServicesJars");
++//                    earlyServicesJarsField.setAccessible(true);
++//                    earlyServicesJars = (List<ModFile>) earlyServicesJarsField.get(FMLLoader.getCurrent());
++//                } catch (Throwable t) {
++//                    LOGGER.debug(LogMarkers.LOADING, "Error reflect the FML, using fallback path", t);
++//                }
++//            }
++//
++//            FileSystem upperFs;
++//
++//            if (earlyServicesJars != null) {
++//                LOGGER.info(LogMarkers.LOADING, "Overlay backing: jimfs");
++//                upperFs = Jimfs.newFileSystem(Configuration.unix());
++//            } else {
++//                LOGGER.info(LogMarkers.LOADING, "Overlay backing: temporary file");
++//                Path upperFsBacking = Files.createTempFile("c2me_ocl_neoforge_locator", ".jar");
++//                Files.deleteIfExists(upperFsBacking);
++//                upperFs = FileSystems.newFileSystem(toJarUri(upperFsBacking), Collections.singletonMap("create", "true"));
++//                upperFsBacking.toFile().deleteOnExit();
++//                LOGGER.info(LogMarkers.LOADING, "Created temporary file {}", upperFsBacking.toAbsolutePath().toString());
++//            }
++
++            Path currentJarFile = Path.of(ModWrapper.class.getProtectionDomain().getCodeSource().getLocation().toURI());
++            Path currentJar = FileSystems.newFileSystem(currentJarFile).getPath("/");
++
++//            Path upperFsRoot = upperFs.getPath("/overlay/", currentJarFile.getFileName().toString());
++
++            JsonObject json;
++
++            try (BufferedReader reader = Files.newBufferedReader(currentJar.resolve(CLOBBERED_METADATA_PATH))) {
++                json = GSON.fromJson(reader, JsonObject.class);
++            }
++
++            IModFile parent = IModFile.create(JarContents.ofPath(currentJarFile), ModWrapper::buildOuterFileInfo, IModFile.Type.LIBRARY, ModFileDiscoveryAttributes.DEFAULT.withLocator(this));
++
++            Path jijCacheDir = FMLPaths.JIJ_CACHEDIR.get();
++
++            for (Iterator<JsonElement> iterator = json.get("jars").getAsJsonArray().iterator(); iterator.hasNext(); ) {
++                JsonObject jar = iterator.next().getAsJsonObject();
++                JsonElement identifier = jar.get("identifier");
++                if (FMLLoader.getCurrent().getDist() == Dist.CLIENT) {
++                    if (identifier != null) {
++                        JsonElement groupElement = identifier.getAsJsonObject().get("group");
++                        JsonElement artifactElement = identifier.getAsJsonObject().get("artifact");
++                        if (groupElement != null && artifactElement != null) {
++                            // neo-loom uses "artifact:classifier" in place of artifact, because the spec is broken and I have to do this dumpster fire
++                            if (groupElement.getAsString().equals("org.lwjgl") && (artifactElement.getAsString().equals("lwjgl") || artifactElement.getAsString().startsWith("lwjgl:"))) {
++                                LOGGER.debug(LogMarkers.LOADING, "Removing {}", identifier);
++                                iterator.remove();
++                                continue;
++                            }
++
++                            if (groupElement.getAsString().equals("org.apache.commons") && artifactElement.getAsString().equals("commons-compress")) {
++                                LOGGER.debug(LogMarkers.LOADING, "Removing {}", identifier);
++                                iterator.remove();
++                                continue;
++                            }
++                        }
++                    }
++                }
++
++                String path = jar.get("path").getAsString();
++                Path finalPath;
++
++                {
++                    Path tempFile;
++                    try {
++                        tempFile = Files.createTempFile(jijCacheDir, "_jij", ".tmp");
++                    } catch (IOException e) {
++                        throw new ModFileLoadingException("Failed to create a temporary file for JIJ in " + jijCacheDir + ": " + e, e);
++                    }
++
++                    try {
++                        String checksum = extractEmbeddedJarFile(currentJar.resolve(path), tempFile);
++                        String filename = path.substring(path.lastIndexOf('/') + 1);
++                        finalPath = jijCacheDir.resolve(checksum + "/" + filename);
++                        moveExtractedFileIntoPlace(tempFile, finalPath);
++
++                        PathPrettyPrinting.addSubstitution(finalPath, PathPrettyPrinting.prettyPrint(currentJarFile) + " > " + filename, "");
++                    } finally {
++                        try {
++                            Files.deleteIfExists(tempFile);
++                        } catch (IOException e) {
++                            LOGGER.error("Failed to remove temporary file {}: {}", tempFile, e);
++                        }
++                    }
++                }
++
++                IModFile modFile = pipeline.readModFile(
++                        JarContents.ofPath(finalPath),
++                        ModFileDiscoveryAttributes.DEFAULT.withLocator(this).withParent(parent)
++                );
++                Objects.requireNonNull(modFile);
++                if (modFile.getType() == IModFile.Type.LIBRARY) {
++                    modFile = IModFile.create(
++                            JarContents.ofPath(finalPath),
++                            JarModsDotTomlModFileReader::manifestParser,
++                            IModFile.Type.GAMELIBRARY,
++                            ModFileDiscoveryAttributes.DEFAULT.withLocator(this).withParent(parent)
++                    );
++                }
++                LOGGER.info(LogMarkers.LOADING, "Adding to mods: {}", modFile);
++                pipeline.addModFile(modFile);
++            }
++
++//            Path lowerRoot = upperFsRoot.resolve("lower_overlay");
++//            Files.createDirectories(lowerRoot);
++//
++//            Path upperRoot = upperFsRoot.resolve("upper_overlay");
++//            Path upperMetadataPath = upperRoot.resolve(Constants.CONTAINED_JARS_METADATA_PATH);
++//            Files.createDirectories(upperMetadataPath.getParent());
++//            try (BufferedWriter writer = Files.newBufferedWriter(upperMetadataPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
++//                GSON.toJson(json, writer);
++//            }
++//
++//            IModFile iModFile = IModFile.create(
++//                    JarContents.ofPaths(
++//                            List.of( // lower to upper, but doesn't really matter here
++//                                    lowerRoot,
++//                                    currentJar,
++//                                    upperRoot
++//                            )
++//                    ),
++//                    ModWrapper::buildOuterFileInfo,
++//                    IModFile.Type.LIBRARY,
++//                    ModFileDiscoveryAttributes.DEFAULT.withLocator(this)
++//            );
++//
++//            if (earlyServicesJars != null) {
++//                earlyServicesJars.add((ModFile) iModFile);
++//            } else {
++//                pipeline.addModFile(iModFile);
++//            }
++
++        } catch (Throwable t) {
++            throw new RuntimeException("Loading C2ME OpenCL mod", t);
++        }
++    }
++
++    private static String extractEmbeddedJarFile(Path source, Path destination) {
++        try (
++                InputStream inStream = Files.newInputStream(source);
++                OutputStream outStream = Files.newOutputStream(destination);
++        ) {
++            MessageDigest digest;
++            try {
++                digest = MessageDigest.getInstance("SHA-256");
++            } catch (NoSuchAlgorithmException e) {
++                throw new RuntimeException("Missing default JCA algorithm SHA-256.", e);
++            }
++
++            DigestOutputStream digestOut = new DigestOutputStream(outStream, digest);
++            inStream.transferTo(digestOut);
++            return HexFormat.of().formatHex(digest.digest());
++        } catch (IOException e) {
++            LOGGER.error("Failed to copy Jar-in-Jar file {} to {}", source, destination, e);
++            throw new ModFileLoadingException("Failed to load mod file " + source.getFileName(), e);
++        }
++    }
++
++    private static void moveExtractedFileIntoPlace(Path source, Path destination) {
++        try {
++            Files.createDirectories(destination.getParent());
++        } catch (IOException e) {
++            throw new UncheckedIOException("Failed to create parent directory for extracted JiJ-file " + source + " at " + destination, e);
++        }
++
++        try {
++            try {
++                Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
++            } catch (AtomicMoveNotSupportedException ex) {
++                Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);
++            }
++        } catch (IOException e) {
++            throw new UncheckedIOException("Failed to move temporary JiJ-file " + source + " to its final location " + destination, e);
++        }
++    }
++
++    public static IModFileInfo buildOuterFileInfo(IModFile iModFile) {
++        ModFile modFile = (ModFile)iModFile;
++        Config conf = Config.inMemory();
++        conf.set("modLoader", "lowcodefml");
++        conf.set("loaderVersion", "1");
++        conf.set("license", "All-Rights-Reserved");
++        Config mods = Config.inMemory();
++        mods.set("modId", "c2me_opts_accel_opencl_wrapper");
++        mods.set("version", "0.0.1");
++        mods.set("displayName", "c2me_opts_accel_opencl wrapper");
++        mods.set("description", "c2me_opts_accel_opencl wrapper");
++        conf.set("mods", List.of(mods));
++        NightConfigWrapper configWrapper = new NightConfigWrapper(conf);
++        return new ModFileInfo(modFile, configWrapper, configWrapper::setFile, List.of());
++    }
++
++    private static URI toJarUri(Path path) {
++        URI uri = path.toUri();
++
++        try {
++            return new URI("jar:" + uri.getScheme(), uri.getHost(), uri.getPath(), uri.getFragment());
++        } catch (URISyntaxException e) {
++            throw new RuntimeException("can't convert path "+path+" to uri", e);
++        }
++    }
++
++    @Override
++    public String toString() {
++        return "c2me_opts_accel_opencl_wrapper";
++    }
++}
+diff --git a/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator
+new file mode 100644
+index 00000000..2ff58de4
+--- /dev/null
++++ b/c2me-opts-accel-opencl/src/wrapper/resources/META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator
+@@ -0,0 +1 @@
++com.ishland.c2me.opts.accel.opencl.wrapper.ModWrapper
+\ No newline at end of file

@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <ishlandmc@yeah.net>
+Date: Thu, 31 Oct 2024 23:22:33 +0800
+Subject: [PATCH] Setup publishing
+
+
+diff --git a/build.gradle b/build.gradle
+index 6e3f7146..b9d62d47 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -276,7 +276,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
+ 
+ publishMods {
+     changelog = ghaChangelog
+-    modLoaders.add("fabric")
++    modLoaders.add("neoforge")
+ 
+     def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
+     displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
+@@ -307,7 +307,7 @@ publishMods {
+ 
+         curseforge("curseforgeOpenCLAccel") {
+             from cfOptions
+-            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
++//            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
+             projectId = "1563823"
+             requires("c2me")
+             requires("scalablelux")
+@@ -323,15 +323,15 @@ publishMods {
+         modrinth("modrinthMITPackage") {
+             from mrOptions
+             file = remapJar.archiveFile
+-            projectId = "VSNURh3q"
++            projectId = "COlSi5iR"
+         }
+ 
+         modrinth("modrinthOpenCLAccel") {
+             from mrOptions
+-            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
++//            file = project(":c2me-opts-accel-opencl").remapWrapperJar.archiveFile
+             projectId = "qtPMklut"
+             requires {
+-                id = "VSNURh3q"
++                id = "COlSi5iR"
+             }
+             requires {
+                 id = "Ps1zyz6x"
+diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
+index 59fe1a22..f56251ba 100644
+--- a/c2me-opts-accel-opencl/build.gradle
++++ b/c2me-opts-accel-opencl/build.gradle
+@@ -101,3 +101,12 @@ def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.R
+ com.ishland.c2me.gradle.PostProcessWrapperJarAction.addToTask(remapWrapperJar)
+ 
+ assemble.dependsOn(remapWrapperJar)
++
++rootProject.publishMods {
++    curseforge("curseforgeOpenCLAccel") {
++        file = remapWrapperJar.map { it.archiveFile.get() }
++    }
++    modrinth("modrinthOpenCLAccel") {
++        file = remapWrapperJar.map { it.archiveFile.get() }
++    }
++}

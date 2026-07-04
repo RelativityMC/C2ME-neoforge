@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 717c3f39..ca132d92 100644
+index 870d0d23..d4705450 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -57,7 +57,7 @@ configure(allprojects) {
@@ -26,23 +26,15 @@ index 717c3f39..ca132d92 100644
      repositories {
          maven {
              url = "https://repo.codemc.io/repository/relativitymc/"
-@@ -91,6 +91,15 @@ allprojects {
+@@ -91,6 +91,7 @@ allprojects {
                  includeGroup "com.github.bawnorton.mixinsquared"
              }
          }
 +        maven { url = "https://maven.neoforged.net/releases/" }
-+        maven {
-+            name = "Maven for PR #3198" // https://github.com/neoforged/NeoForge/pull/3198
-+            url = uri("https://prmaven.neoforged.net/NeoForge/pr3198")
-+            content {
-+                includeModule("net.neoforged", "neoforge")
-+                includeModule("net.neoforged", "testframework")
-+            }
-+        }
          def lwjglCentral = mavenCentral {
              content {
                  includeGroup "org.lwjgl"
-@@ -124,23 +133,20 @@ allprojects {
+@@ -124,23 +125,20 @@ allprojects {
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -72,7 +64,7 @@ index 717c3f39..ca132d92 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -173,7 +179,7 @@ configure (allprojects - project(":tests")) {
+@@ -173,7 +171,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -81,7 +73,7 @@ index 717c3f39..ca132d92 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -214,11 +220,11 @@ configure (allprojects - project(":tests")) {
+@@ -214,11 +212,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -95,7 +87,7 @@ index 717c3f39..ca132d92 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -233,11 +239,9 @@ configure (allprojects - project(":tests")) {
+@@ -233,11 +231,9 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -108,7 +100,7 @@ index 717c3f39..ca132d92 100644
              include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
              include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
              include implementation("com.github.ben-manes.caffeine:caffeine:${caffeine_version}")
-@@ -246,7 +250,6 @@ configure (allprojects - project(":tests")) {
+@@ -246,7 +242,6 @@ configure (allprojects - project(":tests")) {
          testImplementation platform("org.junit:junit-bom:${junit_version}")
          testImplementation 'org.junit.jupiter:junit-jupiter'
          testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -116,35 +108,32 @@ index 717c3f39..ca132d92 100644
      }
  
      test {
-@@ -342,6 +345,7 @@ dependencies {
+@@ -366,6 +361,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
 +        workingDir = project.file("..")
      }.standardOutput.asText.get()
      stdout = stdout.toString().strip()
-     stdout = stdout.substring(stdout.indexOf('-') + 1) // strip the existing dash
+     def suffix = ""
 diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
-index df917290..cef6444d 100644
+index df917290..5122ced9 100644
 --- a/buildSrc/build.gradle
 +++ b/buildSrc/build.gradle
-@@ -9,6 +9,10 @@ group = 'com.ishland.c2me'
+@@ -9,6 +9,7 @@ group = 'com.ishland.c2me'
  repositories {
      mavenCentral()
      maven { url = "https://maven.fabricmc.net/" }
-+    maven {
-+        name = 'RelativityMC'
-+        url = 'https://repo.codemc.io/repository/relativitymc/'
-+    }
++    maven { url = "https://repo.codemc.io/repository/relativitymc/" }
  }
  
  dependencies {
-@@ -18,7 +22,7 @@ dependencies {
+@@ -18,7 +19,7 @@ dependencies {
      // https://mvnrepository.com/artifact/com.google.code.gson/gson
      implementation 'com.google.code.gson:gson:2.13.2'
  
 -    implementation 'net.fabricmc.fabric-loom-remap:net.fabricmc.fabric-loom-remap.gradle.plugin:1.17-SNAPSHOT'
-+    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17.0-alpha.28'
++    implementation 'org.relativitymc.neo-loom-remap:org.relativitymc.neo-loom-remap.gradle.plugin:1.17-SNAPSHOT'
  }
  
  gradlePlugin {
@@ -1826,6 +1815,33 @@ index 08b8e676..00000000
 -    }
 -  }
 -}
+diff --git a/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java b/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
+index ef0801f8..c8b80648 100644
+--- a/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
++++ b/c2me-opts-accel-opencl/src/main/java/com/ishland/c2me/opts/accel/opencl/common/integration/zfastnoise/ZFastNoiseBindings.java
+@@ -16,12 +16,12 @@
+ 
+ package com.ishland.c2me.opts.accel.opencl.common.integration.zfastnoise;
+ 
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.block.BlockState;
+ import net.minecraft.util.collection.BoundedRegionArray;
+ import net.minecraft.util.math.ChunkPos;
+ import net.minecraft.world.chunk.ProtoChunk;
+ import net.minecraft.world.gen.chunk.ChunkGeneratorSettings;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -37,7 +37,7 @@ public class ZFastNoiseBindings {
+     public static final MethodHandle MH_FastCopyBufferDataIntoChunks$copyData;
+ 
+     static {
+-        if (FabricLoader.getInstance().isModLoaded("zfastnoise")) {
++        if (FMLLoader.getCurrent().getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("zfastnoise"))) {
+             MethodHandle mh_FastCopyBufferDataIntoChunks$copyData;
+ 
+             try {
 diff --git a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..447328bb
@@ -1879,6 +1895,50 @@ index 00000000..447328bb
 +versionRange = "*"
 +ordering = "NONE"
 +side = "BOTH"
+diff --git a/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json b/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json
+deleted file mode 100644
+index 1a14882a..00000000
+--- a/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json
++++ /dev/null
+@@ -1,38 +0,0 @@
+-{
+-  "schemaVersion": 1,
+-  "id": "c2me-opts-accel-opencl",
+-  "version": "${version}",
+-  "name": "Concurrent Chunk Management Engine (Optimizations/Acceleration/OpenCL)",
+-  "description": "OpenCL acceleration for world generation",
+-  "environment": "*",
+-  "mixins": [
+-    "c2me-opts-accel-opencl.mixins.json"
+-  ],
+-  "depends": {
+-    "minecraft": "*",
+-    "fabricloader": "*",
+-    "c2me-base": "*",
+-    "c2me-opts-dfc": "*",
+-    "c2me-rewrites-chunk-system": "*"
+-  },
+-  "recommends": {
+-    "scalablelux": "*"
+-  },
+-
+-  "authors": [
+-    "RelativityMC",
+-    "ishland"
+-  ],
+-  "contact": {
+-    "sources": "https://github.com/RelativityMC/C2ME-fabric",
+-    "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+-    "discord": "https://discord.gg/Kdy8NM5HW4",
+-    "homepage": "https://modrinth.com/mod/c2me-fabric"
+-  },
+-  "license": "All-Rights-Reserved",
+-  "custom": {
+-    "modmenu": {
+-      "parent": "c2me"
+-    }
+-  }
+-}
 diff --git a/c2me-opts-allocs/build.gradle b/c2me-opts-allocs/build.gradle
 index 11104c69..cf6491e9 100644
 --- a/c2me-opts-allocs/build.gradle
@@ -2189,6 +2249,52 @@ index 6cbb0314..a967fb59 100644
 +        ])
 +    }
 +}
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
+index 4220ecdb..73b7d313 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigClampBindings.java
+@@ -28,8 +28,8 @@ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+ import com.ishland.c2me.opts.dfc.common.ast.McToAst;
+ import com.ishland.c2me.opts.dfc.common.ast.binary.MaxNode;
+ import com.ishland.c2me.opts.dfc.common.ast.binary.MinNode;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -54,7 +54,7 @@ public class ConfigClampBindings {
+         MethodHandle mh_max = null;
+         boolean available = false;
+ 
+-        if (FabricLoader.getInstance().isModLoaded("tectonic")) {
++        if (FMLLoader.getCurrent().getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("tectonic"))) {
+             try {
+                 class_ConfigClamp = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigClamp");
+                 mh_input = MethodHandles.lookup().findVirtual(class_ConfigClamp, "input", MethodType.methodType(DensityFunction.class));
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
+index 542bc1cd..1856d748 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
+@@ -33,8 +33,8 @@ import com.ishland.c2me.opts.dfc.common.ast.binary.MulNode;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantNode;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.CoordinateNode;
+ import com.ishland.c2me.opts.dfc.common.ast.noise.GenericShiftedNoiseNode;
+-import net.fabricmc.loader.api.FabricLoader;
+ import net.minecraft.world.gen.densityfunction.DensityFunction;
++import net.neoforged.fml.loading.FMLLoader;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -67,7 +67,7 @@ public class ConfigNoiseBindings {
+         MethodHandle mh_smootherScaling = null;
+         boolean available = false;
+ 
+-        if (FabricLoader.getInstance().isModLoaded("tectonic")) {
++        if (FMLLoader.getCurrent().getLoadingModList().getMods().stream().anyMatch(modInfo1 -> modInfo1.getModId().equals("tectonic"))) {
+             try {
+                 class_ConfigNoise = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigNoise");
+                 mh_noise = MethodHandles.lookup().findVirtual(class_ConfigNoise, "noise", MethodType.methodType(DensityFunction.Noise.class));
 diff --git a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..aa7ae047
@@ -3750,7 +3856,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 7b442617..a97fb813 100644
+index 68338066..107fdea0 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
@@ -3761,20 +3867,20 @@ index 7b442617..a97fb813 100644
 +#fabric.loom.multiProjectOptimisation=true
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.2-rc-2
- yarn_mappings=26.2-rc-2+build.1
+ minecraft_version=26.2
+ yarn_mappings=26.2+build.1
 -loader_version=0.19.3
 -fabric_version=0.152.0+26.2
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.2.0-alpha.0+rc-2.20260614.052634
++forge_version=26.2.0.7-beta
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
- mod_version=0.4.0-alpha.0
+ mod_version=0.4.2-alpha.0
  maven_group=com.ishland.c2me
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
  # Publishing metadtaa
- curseforge_minecraft_versions=
+ curseforge_minecraft_versions=26.2
  # Java Dependencies
  async_util_version=0.1.0
 -night_config_version=3.6.5
