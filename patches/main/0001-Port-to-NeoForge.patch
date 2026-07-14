@@ -1828,7 +1828,7 @@ index ef0801f8..d4a9fdcc 100644
              try {
 diff --git a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
-index 00000000..f70f1bbf
+index 00000000..f5b0b3be
 --- /dev/null
 +++ b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
 @@ -0,0 +1,54 @@
@@ -1862,21 +1862,21 @@ index 00000000..f70f1bbf
 +[[dependencies.c2me_opts_accel_opencl]]
 +modId = "c2me_base"
 +type = "required"
-+versionRange = "*"
++versionRange = "[0.4.0-alpha.0.0,)"
 +ordering = "NONE"
 +side = "BOTH"
 +
 +[[dependencies.c2me_opts_accel_opencl]]
 +modId = "c2me_opts_dfc"
 +type = "required"
-+versionRange = "*"
++versionRange = "[0.4.0-alpha.0.0,)"
 +ordering = "NONE"
 +side = "BOTH"
 +
 +[[dependencies.c2me_opts_accel_opencl]]
 +modId = "c2me_rewrites_chunk_system"
 +type = "required"
-+versionRange = "*"
++versionRange = "[0.4.0-alpha.0.0,)"
 +ordering = "NONE"
 +side = "BOTH"
 +
@@ -1888,7 +1888,7 @@ index 00000000..f70f1bbf
 +side = "BOTH"
 diff --git a/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json b/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 9aac92df..00000000
+index ff5cf2dc..00000000
 --- a/c2me-opts-accel-opencl/src/main/resources/fabric.mod.json
 +++ /dev/null
 @@ -1,39 +0,0 @@
@@ -1906,9 +1906,9 @@ index 9aac92df..00000000
 -    "minecraft": "*",
 -    "fabricloader": "*",
 -    "java": ">=25",
--    "c2me-base": "*",
--    "c2me-opts-dfc": "*",
--    "c2me-rewrites-chunk-system": "*"
+-    "c2me-base": ">=0.4-",
+-    "c2me-opts-dfc": ">=0.4-",
+-    "c2me-rewrites-chunk-system": ">=0.4-"
 -  },
 -  "recommends": {
 -    "scalablelux": "*"
