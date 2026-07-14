@@ -758,7 +758,7 @@ index 022081e2..cc3d6d23 100644
      }
  
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
-index ed9f4497..354c2e05 100644
+index 39e25a46..e7a7e158 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/mixin/report/MixinDedicatedServerWatchdog.java
 @@ -46,8 +46,8 @@ public class MixinDedicatedServerWatchdog {
@@ -780,7 +780,7 @@ index ed9f4497..354c2e05 100644
 -    private static void addInstrumentationData(String message, long threadId, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport report) {
 +    @Inject(method = "createWatchdogCrashReport", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/crash/CrashReport;addElement(Ljava/lang/String;)Lnet/minecraft/util/crash/CrashReportSection;", ordinal = 0))
 +    private static void addInstrumentationData(String message, long threadId, String message1, CallbackInfoReturnable<CrashReport> cir, @Local CrashReport report) {
-         CrashReportSection section = report.addElement("Thread trace dump (obtained on a best-effort basis)");
+         CrashReportSection section = report.addElement("Thread trace dump (obtained on a best-effort basis)", 1);
          try {
              for (Map.Entry<Thread, ThreadState> entry : ThreadInstrumentation.entrySet()) {
 diff --git a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
