@@ -3080,6 +3080,19 @@ index 11104c69..4f5ad227 100644
 +        ])
 +    }
 +}
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index a5e77df5..9e1089da 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -134,7 +134,7 @@ public class Config {
+                     Enabling this will almost certainly break vanilla behavior, disabled by default on fabric
+                     Do not change this unless you know what you are doing
+                     """)
+-            .getBoolean(false, false);
++            .getBoolean(true, false);
+ 
+     public static void init() {
+         // intentionally empty
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
 index 8e2bce5c..8f5aeefd 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
