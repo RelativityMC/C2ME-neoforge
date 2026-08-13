@@ -5,10 +5,10 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 2fd1c063..960f1de6 100644
+index 5a781bda..c942d5ec 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -57,7 +57,7 @@ configure(allprojects) {
+@@ -58,7 +58,7 @@ configure(allprojects) {
      }
  
      afterEvaluate {
@@ -17,7 +17,7 @@ index 2fd1c063..960f1de6 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -80,7 +80,7 @@ base {
+@@ -81,7 +81,7 @@ base {
  clean.dependsOn gradle.includedBuild('FlowSched').task(':clean')
  
  allprojects {
@@ -26,7 +26,7 @@ index 2fd1c063..960f1de6 100644
      repositories {
          maven {
              url = "https://repo.codemc.io/repository/relativitymc/"
-@@ -91,6 +91,7 @@ allprojects {
+@@ -92,6 +92,7 @@ allprojects {
                  includeGroup "com.github.bawnorton.mixinsquared"
              }
          }
@@ -34,7 +34,7 @@ index 2fd1c063..960f1de6 100644
          def lwjglCentral = mavenCentral {
              content {
                  includeGroup "org.lwjgl"
-@@ -124,23 +125,20 @@ allprojects {
+@@ -125,23 +126,20 @@ allprojects {
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -64,7 +64,7 @@ index 2fd1c063..960f1de6 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -168,7 +166,7 @@ configure (allprojects - project(":tests")) {
+@@ -169,7 +167,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -73,7 +73,7 @@ index 2fd1c063..960f1de6 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -209,11 +207,11 @@ configure (allprojects - project(":tests")) {
+@@ -210,11 +208,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -87,7 +87,7 @@ index 2fd1c063..960f1de6 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -228,11 +226,9 @@ configure (allprojects - project(":tests")) {
+@@ -229,11 +227,9 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -100,7 +100,7 @@ index 2fd1c063..960f1de6 100644
              include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
              include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
              include implementation("com.github.ben-manes.caffeine:caffeine:${caffeine_version}")
-@@ -241,7 +237,6 @@ configure (allprojects - project(":tests")) {
+@@ -242,7 +238,6 @@ configure (allprojects - project(":tests")) {
          testImplementation platform("org.junit:junit-bom:${junit_version}")
          testImplementation 'org.junit.jupiter:junit-jupiter'
          testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -108,7 +108,7 @@ index 2fd1c063..960f1de6 100644
      }
  
      test {
-@@ -361,6 +356,7 @@ dependencies {
+@@ -362,6 +357,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
@@ -3335,7 +3335,7 @@ index 8bc3c6f8..43052261 100644
                                  );
                              } finally {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 9e7224f4..e9c657d1 100644
+index b3cf64d9..60cf8ace 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -25,7 +25,6 @@
