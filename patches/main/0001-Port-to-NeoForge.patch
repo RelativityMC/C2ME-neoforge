@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index b737a8be..cce177a9 100644
+index 36d1a179..3c8e3163 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,8 +1,6 @@
@@ -17,7 +17,7 @@ index b737a8be..cce177a9 100644
      id 'com.gradleup.shadow' version '9.4.2' apply false
      id 'io.github.tomtzook.gradle-cmake' version '1.2.2' apply false
      id 'dev.yumi.gradle.licenser' version '4.0.0' apply false
-@@ -57,7 +55,7 @@ configure(allprojects) {
+@@ -58,7 +56,7 @@ configure(allprojects) {
      }
  
      afterEvaluate {
@@ -26,7 +26,7 @@ index b737a8be..cce177a9 100644
              afterEvaluate {
                  migrateMappings.configure {
                      outputDir = project.file("build/remappedSrc")
-@@ -80,7 +78,7 @@ base {
+@@ -81,7 +79,7 @@ base {
  clean.dependsOn gradle.includedBuild('FlowSched').task(':clean')
  
  allprojects {
@@ -35,7 +35,7 @@ index b737a8be..cce177a9 100644
      repositories {
          maven {
              url = "https://maven.bawnorton.com/releases"
-@@ -115,29 +113,27 @@ allprojects {
+@@ -116,29 +114,27 @@ allprojects {
                  }
              }
          }
@@ -72,7 +72,7 @@ index b737a8be..cce177a9 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -162,7 +158,7 @@ configure (allprojects - project(":tests")) {
+@@ -163,7 +159,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -81,7 +81,7 @@ index b737a8be..cce177a9 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -203,11 +199,12 @@ configure (allprojects - project(":tests")) {
+@@ -204,11 +200,12 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -96,7 +96,7 @@ index b737a8be..cce177a9 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -222,20 +219,24 @@ configure (allprojects - project(":tests")) {
+@@ -223,20 +220,24 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -125,7 +125,7 @@ index b737a8be..cce177a9 100644
      }
  
      test {
-@@ -341,15 +342,13 @@ publishMods {
+@@ -342,15 +343,13 @@ publishMods {
  //subprojects.forEach { remapJar.dependsOn("${it.path}:remapJar") }
  
  dependencies {
@@ -147,7 +147,7 @@ index b737a8be..cce177a9 100644
          }
      }
  }
-@@ -358,6 +357,7 @@ String getVersionSuffix() {
+@@ -359,6 +358,7 @@ String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
          workingDir = project.file("..")
@@ -2379,7 +2379,7 @@ index ab7ca6bf..a2e292b6 100644
                  class_ConfigNoise = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigNoise");
                  mh_noise = MethodHandles.lookup().findVirtual(class_ConfigNoise, "noise", MethodType.methodType(DensityFunction.Noise.class));
 diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/InvertBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/InvertBindings.java
-index ffb1c4a8..2073fac3 100644
+index 7bbc3ed0..e8943d5d 100644
 --- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/InvertBindings.java
 +++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/InvertBindings.java
 @@ -29,8 +29,8 @@ import com.ishland.c2me.opts.dfc.common.ast.FrontendRegistry;
@@ -3502,7 +3502,7 @@ index 9f11ff4d..01332d13 100644
                      })
                      .onErrorResumeNext(throwable -> {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
-index 0e777f41..d1438f89 100644
+index a5d9cf1f..975197b3 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ServerAccessible.java
 @@ -26,7 +26,6 @@ package com.ishland.c2me.rewrites.chunksystem.common.statuses;

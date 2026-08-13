@@ -5,10 +5,10 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 48cf2b81..6d45521e 100644
+index 3c8e3163..b9d4e4dc 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -273,7 +273,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
+@@ -274,7 +274,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
  
  publishMods {
      changelog = ghaChangelog
@@ -17,7 +17,7 @@ index 48cf2b81..6d45521e 100644
  
      def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
      displayName = envDisplayName != null ? envDisplayName : (project.version + " backport devbuild for " + project.minecraft_version)
-@@ -305,7 +305,7 @@ publishMods {
+@@ -306,7 +306,7 @@ publishMods {
  
          curseforge("curseforgeOpenCLAccel") {
              from cfOptions
@@ -26,7 +26,7 @@ index 48cf2b81..6d45521e 100644
              projectId = "1563823"
              requires("c2me")
              requires("scalablelux")
-@@ -322,15 +322,15 @@ publishMods {
+@@ -323,15 +323,15 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile
