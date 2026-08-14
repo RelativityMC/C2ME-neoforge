@@ -118,10 +118,10 @@ index 00000000..f4341392
 +	}
 +}
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
-index 368e98af..a7688251 100644
+index 77fbc2bf..36e71b2e 100644
 --- a/c2me-opts-accel-opencl/build.gradle
 +++ b/c2me-opts-accel-opencl/build.gradle
-@@ -9,6 +9,17 @@ java {
+@@ -10,6 +10,17 @@ java {
      targetCompatibility = JavaVersion.VERSION_25
  }
  
@@ -139,7 +139,7 @@ index 368e98af..a7688251 100644
  dependencies {
      include implementation(platform("org.lwjgl:lwjgl-bom:${lwjgl_version}"))
      include implementation("org.lwjgl:lwjgl")
-@@ -25,4 +36,71 @@ dependencies {
+@@ -26,4 +37,71 @@ dependencies {
      include runtimeOnly("org.lwjgl:lwjgl::natives-macos-arm64")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-linux")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-windows")

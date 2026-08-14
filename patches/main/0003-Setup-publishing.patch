@@ -46,10 +46,10 @@ index 3c8e3163..b9d4e4dc 100644
              requires {
                  id = "Ps1zyz6x"
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
-index a7688251..ce9c2e78 100644
+index 36e71b2e..9ae00cb5 100644
 --- a/c2me-opts-accel-opencl/build.gradle
 +++ b/c2me-opts-accel-opencl/build.gradle
-@@ -104,3 +104,12 @@ def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.R
+@@ -105,3 +105,12 @@ def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.R
  }
  
  assemble.dependsOn(remapWrapperJar)

@@ -2317,12 +2317,12 @@ index 9dd0f4b3..00000000
 -  }
 -}
 diff --git a/c2me-opts-dfc/build.gradle b/c2me-opts-dfc/build.gradle
-index 6cbb0314..a967fb59 100644
+index 748a5aca..8485eb36 100644
 --- a/c2me-opts-dfc/build.gradle
 +++ b/c2me-opts-dfc/build.gradle
-@@ -2,3 +2,11 @@ moduleDependencies(project, [
+@@ -1,3 +1,11 @@
+ moduleDependencies(project, [
          "c2me-base",
-         "c2me-opts-natives-math",
  ])
 +
 +jar {
@@ -2442,10 +2442,10 @@ index 00000000..aa7ae047
 +side = "BOTH"
 diff --git a/c2me-opts-dfc/src/main/resources/fabric.mod.json b/c2me-opts-dfc/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 072b446d..00000000
+index a675d2c6..00000000
 --- a/c2me-opts-dfc/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,34 +0,0 @@
+@@ -1,33 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-opts-dfc",
@@ -2459,8 +2459,7 @@ index 072b446d..00000000
 -  "depends": {
 -    "minecraft": "*",
 -    "fabricloader": "*",
--    "c2me-base": "*",
--    "c2me-opts-natives-math": "*"
+-    "c2me-base": "*"
 -  },
 -
 -  "authors": [
