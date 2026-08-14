@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Fri, 14 Aug 2026 20:20:46 +0800
+Subject: [PATCH] fix: workaround create cosmonautics
+
+Please specify the full function descriptor in your damn mixin
+
+diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/McToAst.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/McToAst.java
+index ff642ae5..cc1117b8 100644
+--- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/McToAst.java
++++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/McToAst.java
+@@ -188,7 +188,7 @@ public class McToAst {
+         REGISTRY.registerExactMatch(DensityFunctionTypes.YClampedGradient.class, f -> new YClampedGradientNode(f.fromY(), f.toY(), f.fromValue(), f.toValue()));
+         REGISTRY.registerExactMatch(DensityFunctionTypes.WeirdScaledSampler.class, f -> new DFTWeirdScaledSamplerNode(toAst(f.input()), f.noise(), f.rarityValueMapper()));
+ //        REGISTRY.registerExactMatch(DensityFunctionTypes.Spline.class, f -> new SplineAstNode(f.spline()));
+-        REGISTRY.registerExactMatch(DensityFunctionTypes.Spline.class, f -> new Multi2SingleNode(new ToF64Node(toAst(f.spline()))));
++        REGISTRY.registerExactMatch(DensityFunctionTypes.Spline.class, f -> new Multi2SingleNode(new ToF64Node(toAstSpline(f.spline()))));
+         REGISTRY.registerExactMatch(FindTopSurface.class, f -> new FindTopSurfaceNode(toAst(f.delegate()), toAst(f.upperBound()), new ConstantNode(f.lowerBound()), f.cellHeight()));
+ 
+         // delegate nodes that have specialized OpenCL gen
+@@ -213,13 +213,14 @@ public class McToAst {
+         }
+     }
+ 
+-    public static AstNode toAst(Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline) {
++    // renamed from toAst to workaround create cosmonautics
++    public static AstNode toAstSpline(Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline) {
+         return switch (spline) {
+             case Spline.FixedFloatFunction<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> f -> new ConstantF32Node(f.value());
+             case Spline.Implementation<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> f -> new SplineNormalNode(
+                     toAst(f.locationFunction().function().value()),
+                     f.locations().clone(),
+-                    f.values().stream().map(McToAst::toAst).toArray(AstNode[]::new),
++                    f.values().stream().map(McToAst::toAstSpline).toArray(AstNode[]::new),
+                     f.derivatives().clone()
+             );
+             default -> throw new IllegalStateException("Unexpected type: " + spline.getClass());
