@@ -5,10 +5,10 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 6e3f7146..b9d62d47 100644
+index 0db3a783..02e9123b 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -276,7 +276,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
+@@ -277,7 +277,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
  
  publishMods {
      changelog = ghaChangelog
@@ -17,7 +17,7 @@ index 6e3f7146..b9d62d47 100644
  
      def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
      displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
-@@ -307,7 +307,7 @@ publishMods {
+@@ -308,7 +308,7 @@ publishMods {
  
          curseforge("curseforgeOpenCLAccel") {
              from cfOptions
@@ -26,7 +26,7 @@ index 6e3f7146..b9d62d47 100644
              projectId = "1563823"
              requires("c2me")
              requires("scalablelux")
-@@ -323,15 +323,15 @@ publishMods {
+@@ -324,15 +324,15 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile
@@ -46,10 +46,10 @@ index 6e3f7146..b9d62d47 100644
              requires {
                  id = "Ps1zyz6x"
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
-index 59fe1a22..f56251ba 100644
+index 40a60687..91bdb90c 100644
 --- a/c2me-opts-accel-opencl/build.gradle
 +++ b/c2me-opts-accel-opencl/build.gradle
-@@ -101,3 +101,12 @@ def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.R
+@@ -102,3 +102,12 @@ def remapWrapperJar = tasks.register("remapWrapperJar", net.fabricmc.loom.task.R
  com.ishland.c2me.gradle.PostProcessWrapperJarAction.addToTask(remapWrapperJar)
  
  assemble.dependsOn(remapWrapperJar)
