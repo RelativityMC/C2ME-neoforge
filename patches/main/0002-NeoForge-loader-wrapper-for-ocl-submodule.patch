@@ -5,7 +5,7 @@ Subject: [PATCH] NeoForge loader wrapper for ocl submodule
 
 
 diff --git a/build.gradle b/build.gradle
-index 546e0a9d..21149cbb 100644
+index c942d5ec..c3536416 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,8 +1,6 @@
@@ -251,10 +251,10 @@ index 00000000..198a618e
 +	}
 +}
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
-index 4cb9f6d1..1d044d80 100644
+index cb88d250..61302af7 100644
 --- a/c2me-opts-accel-opencl/build.gradle
 +++ b/c2me-opts-accel-opencl/build.gradle
-@@ -4,6 +4,17 @@ moduleDependencies(project, [
+@@ -5,6 +5,17 @@ moduleDependencies(project, [
          "c2me-rewrites-chunk-system",
  ])
  
@@ -272,7 +272,7 @@ index 4cb9f6d1..1d044d80 100644
  dependencies {
      include implementation(platform("org.lwjgl:lwjgl-bom:${lwjgl_version}"))
      include implementation("org.lwjgl:lwjgl")
-@@ -20,4 +31,73 @@ dependencies {
+@@ -21,4 +32,73 @@ dependencies {
      include runtimeOnly("org.lwjgl:lwjgl::natives-macos-arm64")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-linux")
      include runtimeOnly("org.lwjgl:lwjgl-zstd::natives-windows")

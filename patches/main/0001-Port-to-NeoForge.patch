@@ -2234,12 +2234,12 @@ index 9dd0f4b3..00000000
 -  }
 -}
 diff --git a/c2me-opts-dfc/build.gradle b/c2me-opts-dfc/build.gradle
-index 6cbb0314..a967fb59 100644
+index 748a5aca..8485eb36 100644
 --- a/c2me-opts-dfc/build.gradle
 +++ b/c2me-opts-dfc/build.gradle
-@@ -2,3 +2,11 @@ moduleDependencies(project, [
+@@ -1,3 +1,11 @@
+ moduleDependencies(project, [
          "c2me-base",
-         "c2me-opts-natives-math",
  ])
 +
 +jar {
