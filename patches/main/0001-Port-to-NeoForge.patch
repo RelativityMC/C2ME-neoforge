@@ -185,12 +185,12 @@ index cee699a1..15ce18f1 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index 77248796..35bd8149 100644
+index bb40d526..25c70baf 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-@@ -26,8 +26,8 @@ package com.ishland.c2me.base;
- 
+@@ -27,8 +27,8 @@ package com.ishland.c2me.base;
  import com.ishland.c2me.base.common.config.ConfigSystem;
+ import com.ishland.c2me.base.common.threadpriority.ThreadPriorityPresets;
  import io.netty.util.internal.PlatformDependent;
 -import net.fabricmc.api.EnvType;
 -import net.fabricmc.loader.api.FabricLoader;
@@ -198,10 +198,15 @@ index 77248796..35bd8149 100644
 +import net.neoforged.fml.loading.FMLEnvironment;
  import net.objecthunter.exp4j.ExpressionBuilder;
  import net.objecthunter.exp4j.function.Function;
- 
-@@ -70,18 +70,6 @@ public class ModuleEntryPoint {
+ import org.slf4j.Logger;
+@@ -101,22 +101,10 @@ public class ModuleEntryPoint {
                      """)
-             .getLong(Thread.NORM_PRIORITY - 1, Thread.NORM_PRIORITY - 1, ConfigSystem.LongChecks.POSITIVE_VALUES_ONLY);
+             .getEnum(
+                     ThreadPriorityPresets.class,
+-                    FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
++                    FMLEnvironment.getDist() == Dist.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
+                     ThreadPriorityPresets.LOW
+             );
  
 -    public static final boolean disableLoggingShutdownHook = new ConfigSystem.ConfigAccessor()
 -            .key("fixes.disableLoggingShutdownHook")
@@ -217,16 +222,16 @@ index 77248796..35bd8149 100644
 -
      public static final int defaultParallelism;
  
-     private static int tryEvaluateExpression(String expression) {
-@@ -109,7 +97,7 @@ public class ModuleEntryPoint {
+     private static int fetchedCoreCount = -1;
+@@ -182,7 +170,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
 -                        .setVariable("is_client", FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? 1 : 0)
 +                        .setVariable("is_client", FMLEnvironment.getDist() == Dist.CLIENT ? 1 : 0)
-                         .setVariable("cpus", Runtime.getRuntime().availableProcessors())
-                         .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
-                         .evaluate()
+                         .setVariable("cpus", availableProcessors)
+                         .setVariable("cores", coreCount)
+                         .setVariable("is_smt_probably_enabled", availableProcessors > coreCount ? 1 : 0)
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 index a2783592..b8e36281 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
@@ -256,7 +261,7 @@ index f21ae712..b09f4042 100644
          if (!isEnabled) {
              LOGGER.info("Disabling {}", mixinPackage);
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-index 620c1556..e2ecddf5 100644
+index 996e5284..30e3af97 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 @@ -27,11 +27,16 @@ package com.ishland.c2me.base.common.config;
@@ -2336,10 +2341,10 @@ index 00000000..aa7ae047
 +side = "BOTH"
 diff --git a/c2me-opts-dfc/src/main/resources/fabric.mod.json b/c2me-opts-dfc/src/main/resources/fabric.mod.json
 deleted file mode 100644
-index 072b446d..00000000
+index a675d2c6..00000000
 --- a/c2me-opts-dfc/src/main/resources/fabric.mod.json
 +++ /dev/null
-@@ -1,34 +0,0 @@
+@@ -1,33 +0,0 @@
 -{
 -  "schemaVersion": 1,
 -  "id": "c2me-opts-dfc",
@@ -2353,8 +2358,7 @@ index 072b446d..00000000
 -  "depends": {
 -    "minecraft": "*",
 -    "fabricloader": "*",
--    "c2me-base": "*",
--    "c2me-opts-natives-math": "*"
+-    "c2me-base": "*"
 -  },
 -
 -  "authors": [
