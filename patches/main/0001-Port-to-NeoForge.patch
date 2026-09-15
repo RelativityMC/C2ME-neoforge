@@ -3887,7 +3887,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index fbc55ddf..a01dc9eb 100644
+index fbc55ddf..6e13f033 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
@@ -3904,7 +3904,7 @@ index fbc55ddf..a01dc9eb 100644
 -fabric_version=0.158.2+26.3
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
 +forge_version=26.2.0.200-pr-3403-port-26.3
-+yarn_mappings_patch_neoforge_version=26.1+build.1
++yarn_mappings_patch_neoforge_version=26.3+build.6
  # Mod Properties
  mod_version=0.4.2-alpha.0
  maven_group=com.ishland.c2me
