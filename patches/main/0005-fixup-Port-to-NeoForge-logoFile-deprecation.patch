@@ -1,0 +1,331 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Wed, 16 Sep 2026 02:07:42 +0800
+Subject: [PATCH] fixup! Port to NeoForge: logoFile deprecation
+
+
+diff --git a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
+index 76bac433..87b947f3 100644
+--- a/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-base/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_base"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Base)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''A NeoForge mod designed to improve the chunk performance of Minecraft.'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+index 2289abcf..a2a68767 100644
+--- a/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-client-uncapvd/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_client_uncapvd"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Client/Uncap View Distance)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Client-side module for modifying maximum view distance'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+index 3f3101f2..e3149a8d 100644
+--- a/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-fixes-chunkio-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_fixes_chunkio_threading_issues"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Fixes/Chunk IO/Threading Issues)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Fixes threading issues related to chunk IO'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+index 317ba9cd..7386494b 100644
+--- a/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-fixes-general-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_fixes_general_threading_issues"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Fixes/General/Threading Issues)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Fixes threading issues for general chunk storage'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+index 78b78291..76345025 100644
+--- a/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-fixes-worldgen-threading-issues/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_fixes_worldgen_threading_issues"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Fixes/WorldGen/Threading Issues)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Fixes threading issues for vanilla world generation code'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
+index c131913b..89fa4ae8 100644
+--- a/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-fixes-worldgen-vanilla-bugs/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_fixes_worldgen_vanilla_bugs"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Fixes/WorldGen/Vanilla Bugs)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Fixes for some vanilla worldgen crashing bugs'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml b/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
+index 3767cb79..95aba0fb 100644
+--- a/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-notickvd/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_notickvd"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (No Tick View Distance)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''An faster alternative implementation of simulation distance supporting view distance up to 248 chunks'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
+index 447328bb..4ab512fa 100644
+--- a/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-accel-opencl/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_accel_opencl"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Acceleration/OpenCL)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''OpenCL acceleration for world generation'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
+index e54eab96..39ded565 100644
+--- a/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-allocs/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_allocs"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Memory Allocations)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations related to chunk access'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
+index a97e1f0c..31837d90 100644
+--- a/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-chunk-access/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_chunk_access"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Chunk Access)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations related to chunk access'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+index 4bafcc83..050170a1 100644
+--- a/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_chunkio"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Chunk IO)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations for chunk IO'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
+index aa7ae047..dbc5b3e0 100644
+--- a/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-dfc/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_dfc"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Density Function Compiler)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations for density functions used in world generation'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
+index 9361ea12..1c7a171e 100644
+--- a/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-math/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_math"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Math)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations for math used in world generation'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
+index bd468fa7..d1a9d379 100644
+--- a/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-natives-math/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_natives_math"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Natives Math)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations for math using native libraries'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
+index b0a8f1d7..820544db 100644
+--- a/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-scheduling/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_scheduling"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Scheduling)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Chunk scheduling optimizations'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
+index 1bef8012..8fd59a20 100644
+--- a/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-worldgen-general/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_worldgen_general"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/General WorldGen)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations for general world generation performance'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
+index 83d9bdd1..52b2ff17 100644
+--- a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_opts_worldgen_vanilla"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Optimizations/Vanilla WorldGen)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Optimizations targeting vanilla world generation'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
+index 342b93f9..bed78e6b 100644
+--- a/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-rewrites-chunk-serializer/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_rewrites_chunk_serializer"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Rewrites/Chunk Serializer)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, Kroppeb"
+ description='''Optimizations related to chunk serialization'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
+index 23b41ac3..94a775f2 100644
+--- a/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-rewrites-chunk-system/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_rewrites_chunk_system"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Rewrites/Chunk System)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''An alternative chunk system'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml b/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+index b2df9173..dc7d9cbf 100644
+--- a/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-rewrites-chunkio/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_rewrites_chunkio"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Rewrites/Chunk IO)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''An alternative chunk IO system focused on overall throughput'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml b/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
+index 911f619f..6fe1f4e2 100644
+--- a/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-server-utils/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_server_utils"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Server Utils)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Some server-side utilities'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml b/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
+index 7f2b7d2b..41690bef 100644
+--- a/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
++++ b/c2me-threading-lighting/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me_threading_lighting"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine (Threading/Lighting)"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''Makes lighting onto its dedicated thread'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/src/main/resources/META-INF/neoforge.mods.toml b/src/main/resources/META-INF/neoforge.mods.toml
+index 61f6c102..0daeaa31 100644
+--- a/src/main/resources/META-INF/neoforge.mods.toml
++++ b/src/main/resources/META-INF/neoforge.mods.toml
+@@ -10,7 +10,7 @@ showAsDataPack = false
+ modId="c2me"
+ version="${version}"
+ displayName="Concurrent Chunk Management Engine"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ description='''A NeoForge mod designed to improve the chunk performance of Minecraft.'''
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+diff --git a/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml b/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
+index 5c62edb0..026181b6 100644
+--- a/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
++++ b/tests/c2me-test/src/main/resources/META-INF/neoforge.mods.toml
+@@ -9,7 +9,7 @@ showAsDataPack = false
+ [[mods]]
+ modId="c2me_testc2meserver"
+ version="${version}"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+ 
+diff --git a/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml b/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml
+index c932203a..9c81b52c 100644
+--- a/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml
++++ b/tests/test-mod/src/main/resources/META-INF/neoforge.mods.toml
+@@ -9,7 +9,7 @@ showAsDataPack = false
+ [[mods]]
+ modId="c2metests"
+ version="${version}"
+-logoFile="assets/c2me/icon.png"
++iconFile="assets/c2me/icon.png"
+ authors="RelativityMC, ishland"
+ displayURL = "https://github.com/RelativityMC/C2ME-neoforge"
+ 

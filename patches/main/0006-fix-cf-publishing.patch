@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Wed, 16 Sep 2026 02:08:08 +0800
+Subject: [PATCH] fix: cf publishing
+
+
+diff --git a/gradle.properties b/gradle.properties
+index 6e13f033..abfd0d1a 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -23,7 +23,7 @@ mod_version=0.4.2-alpha.0
+ maven_group=com.ishland.c2me
+ archives_base_name=c2me-neoforge
+ # Publishing metadtaa
+-curseforge_minecraft_versions=26.1-snapshot
++curseforge_minecraft_versions=26.3
+ # Java Dependencies
+ async_util_version=0.1.0
+ #night_config_version=3.6.5
