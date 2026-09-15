@@ -5,10 +5,10 @@ Subject: [PATCH] Setup publishing
 
 
 diff --git a/build.gradle b/build.gradle
-index 0db3a783..02e9123b 100644
+index 1f15df4b..f12aaaed 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -277,7 +277,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
+@@ -285,7 +285,7 @@ apply plugin: 'me.modmuss50.mod-publish-plugin'
  
  publishMods {
      changelog = ghaChangelog
@@ -17,16 +17,16 @@ index 0db3a783..02e9123b 100644
  
      def envDisplayName = System.getenv("OVERRIDE_DISPLAY_NAME")
      displayName = envDisplayName != null ? envDisplayName : (project.version + " devbuild for " + project.minecraft_version)
-@@ -308,7 +308,7 @@ publishMods {
- 
-         curseforge("curseforgeOpenCLAccel") {
-             from cfOptions
--            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
-+//            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
-             projectId = "1563823"
-             requires("c2me")
-             requires("scalablelux")
-@@ -324,15 +324,15 @@ publishMods {
+@@ -317,7 +317,7 @@ publishMods {
+         if (findProject(":c2me-opts-accel-opencl") != null) {
+             curseforge("curseforgeOpenCLAccel") {
+                 from cfOptions
+-                file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
++    //            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
+                 projectId = "1563823"
+                 requires("c2me")
+                 optional("scalablelux")
+@@ -334,16 +334,16 @@ publishMods {
          modrinth("modrinthMITPackage") {
              from mrOptions
              file = remapJar.archiveFile
@@ -34,17 +34,18 @@ index 0db3a783..02e9123b 100644
 +            projectId = "COlSi5iR"
          }
  
-         modrinth("modrinthOpenCLAccel") {
-             from mrOptions
--            file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
-+//            file = project(":c2me-opts-accel-opencl").remapWrapperJar.archiveFile
-             projectId = "qtPMklut"
-             requires {
--                id = "VSNURh3q"
-+                id = "COlSi5iR"
-             }
-             requires {
-                 id = "Ps1zyz6x"
+         if (findProject(":c2me-opts-accel-opencl") != null) {
+             modrinth("modrinthOpenCLAccel") {
+                 from mrOptions
+-                file = project(":c2me-opts-accel-opencl").remapJar.archiveFile
++    //            file = project(":c2me-opts-accel-opencl").remapWrapperJar.archiveFile
+                 projectId = "qtPMklut"
+                 requires {
+-                    id = "VSNURh3q"
++                    id = "COlSi5iR"
+                 }
+                 optional {
+                     id = "Ps1zyz6x"
 diff --git a/c2me-opts-accel-opencl/build.gradle b/c2me-opts-accel-opencl/build.gradle
 index 40a60687..91bdb90c 100644
 --- a/c2me-opts-accel-opencl/build.gradle

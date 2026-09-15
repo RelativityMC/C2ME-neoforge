@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index e8eb8ccf..f7d61fc2 100644
+index 51a8d147..679f0057 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -58,7 +58,7 @@ configure(allprojects) {
@@ -34,7 +34,21 @@ index e8eb8ccf..f7d61fc2 100644
          def lwjglCentral = mavenCentral {
              content {
                  includeGroup "org.lwjgl"
-@@ -125,23 +126,20 @@ allprojects {
+@@ -119,29 +120,34 @@ allprojects {
+                 }
+             }
+         }
++        maven {
++            name = "Maven for PR #3403" // https://github.com/neoforged/NeoForge/pull/3403
++            url = uri("https://prmaven.neoforged.net/NeoForge/pr3403")
++            content {
++                includeModule("net.neoforged", "neoforge")
++                includeModule("net.neoforged", "testframework")
++            }
++        }
+     }
+ }
+ 
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -64,7 +78,7 @@ index e8eb8ccf..f7d61fc2 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -174,7 +172,7 @@ configure (allprojects - project(":tests")) {
+@@ -174,7 +180,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -73,7 +87,7 @@ index e8eb8ccf..f7d61fc2 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -215,11 +213,11 @@ configure (allprojects - project(":tests")) {
+@@ -215,11 +221,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -87,7 +101,7 @@ index e8eb8ccf..f7d61fc2 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -234,11 +232,9 @@ configure (allprojects - project(":tests")) {
+@@ -234,11 +240,9 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -100,7 +114,7 @@ index e8eb8ccf..f7d61fc2 100644
              include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
              include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
              include implementation("com.github.ben-manes.caffeine:caffeine:${caffeine_version}")
-@@ -247,7 +243,6 @@ configure (allprojects - project(":tests")) {
+@@ -247,7 +251,6 @@ configure (allprojects - project(":tests")) {
          testImplementation platform("org.junit:junit-bom:${junit_version}")
          testImplementation 'org.junit.jupiter:junit-jupiter'
          testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -108,7 +122,7 @@ index e8eb8ccf..f7d61fc2 100644
      }
  
      test {
-@@ -367,6 +362,7 @@ dependencies {
+@@ -371,6 +374,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
@@ -821,10 +835,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 42058924..37d2a924 100644
+index 4e55e07f..4f0f4235 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -67,16 +67,16 @@
+@@ -63,16 +63,16 @@
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
      "access.IXoroshiro128PlusPlusRandomSplitter",
@@ -2055,7 +2069,7 @@ index 00000000..e54eab96
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
-index c2de673d..2ab7e3cb 100644
+index 020d6044..93352f20 100644
 --- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 +++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 @@ -5,8 +5,6 @@
@@ -2278,13 +2292,13 @@ index c38a3fad..35b5a08a 100644
                  class_ConfigClamp = Class.forName("dev.worldgen.tectonic.worldgen.densityfunction.ConfigClamp");
                  mh_input = MethodHandles.lookup().findVirtual(class_ConfigClamp, "input", MethodType.methodType(DensityFunction.class));
 diff --git a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
-index ab7ca6bf..37a30206 100644
+index 537744b1..b156dd16 100644
 --- a/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
 +++ b/c2me-opts-dfc/src/main/java/com/ishland/c2me/opts/dfc/common/ast/integration/tectonic/ConfigNoiseBindings.java
 @@ -32,8 +32,8 @@ import com.ishland.c2me.opts.dfc.common.ast.binary.MulNode;
- import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantNode;
- import com.ishland.c2me.opts.dfc.common.ast.misc.CoordinateNode;
- import com.ishland.c2me.opts.dfc.common.ast.noise.GenericShiftedNoiseNode;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantF64Node;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.CoordinateF64Node;
+ import com.ishland.c2me.opts.dfc.common.ast.misc.GenericShiftedF64NoiseNode;
 -import net.fabricmc.loader.api.FabricLoader;
  import net.minecraft.world.gen.densityfunction.DensityFunction;
 +import net.neoforged.fml.loading.FMLLoader;
@@ -2785,7 +2799,7 @@ index 63e5432f..a03ce5fe 100644
 +    }
 +}
 diff --git a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
-index 3e3d98dc..9962be9f 100644
+index 9e7a6946..2d1acdec 100644
 --- a/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
 +++ b/c2me-opts-worldgen-vanilla/src/main/java/com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java
 @@ -40,9 +40,9 @@ import java.util.List;
@@ -2799,7 +2813,7 @@ index 3e3d98dc..9962be9f 100644
 +    @Shadow @Final protected List<JigsawJunction> junctions;
  
      @Shadow
-     private static double getStructureWeight(int x, int y, int z, int yy) {
+     private static float getStructureWeight(int x, int y, int z, int yy) {
 diff --git a/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml b/c2me-opts-worldgen-vanilla/src/main/resources/META-INF/neoforge.mods.toml
 new file mode 100644
 index 00000000..83d9bdd1
@@ -2954,7 +2968,7 @@ index 5c7b2586..5ecef3c3 100644
 +
  }
 diff --git a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
-index 8c1a2e29..184a484f 100644
+index 08b0e3e0..70b1c471 100644
 --- a/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
 +++ b/c2me-rewrites-chunk-serializer/src/main/java/com/ishland/c2me/rewrites/chunk_serializer/common/ChunkDataSerializer.java
 @@ -31,7 +31,6 @@ import com.ishland.c2me.base.mixin.access.IStructureStart;
@@ -3873,7 +3887,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 68338066..107fdea0 100644
+index fbc55ddf..a01dc9eb 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
@@ -3884,12 +3898,12 @@ index 68338066..107fdea0 100644
 +#fabric.loom.multiProjectOptimisation=true
  # Fabric Properties
  # check these on https://fabricmc.net/versions.html
- minecraft_version=26.2
- yarn_mappings=26.2+build.1
--loader_version=0.19.3
--fabric_version=0.152.0+26.2
+ minecraft_version=26.3
+ yarn_mappings=26.3+build.1
+-loader_version=0.19.5
+-fabric_version=0.158.2+26.3
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.2.0.7-beta
++forge_version=26.2.0.200-pr-3403-port-26.3
 +yarn_mappings_patch_neoforge_version=26.1+build.1
  # Mod Properties
  mod_version=0.4.2-alpha.0
@@ -3897,7 +3911,7 @@ index 68338066..107fdea0 100644
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
  # Publishing metadtaa
- curseforge_minecraft_versions=26.2
+ curseforge_minecraft_versions=26.1-snapshot
  # Java Dependencies
  async_util_version=0.1.0
 -night_config_version=3.6.5
@@ -3906,7 +3920,7 @@ index 68338066..107fdea0 100644
  rxjava_version=3.1.12
  reactive_streams_version=1.0.4
 diff --git a/settings.gradle b/settings.gradle
-index 12ca3b14..5132dcd6 100644
+index f274d666..a321e66a 100644
 --- a/settings.gradle
 +++ b/settings.gradle
 @@ -4,13 +4,18 @@ pluginManagement {
