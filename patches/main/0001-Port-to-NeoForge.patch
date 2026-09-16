@@ -226,12 +226,12 @@ index cee699a1..15ce18f1 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index 77248796..4497ef29 100644
+index bb40d526..dcfccec0 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-@@ -26,8 +26,8 @@ package com.ishland.c2me.base;
- 
+@@ -27,8 +27,8 @@ package com.ishland.c2me.base;
  import com.ishland.c2me.base.common.config.ConfigSystem;
+ import com.ishland.c2me.base.common.threadpriority.ThreadPriorityPresets;
  import io.netty.util.internal.PlatformDependent;
 -import net.fabricmc.api.EnvType;
 -import net.fabricmc.loader.api.FabricLoader;
@@ -239,16 +239,25 @@ index 77248796..4497ef29 100644
 +import net.neoforged.fml.loading.FMLEnvironment;
  import net.objecthunter.exp4j.ExpressionBuilder;
  import net.objecthunter.exp4j.function.Function;
+ import org.slf4j.Logger;
+@@ -101,7 +101,7 @@ public class ModuleEntryPoint {
+                     """)
+             .getEnum(
+                     ThreadPriorityPresets.class,
+-                    FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
++                    FMLEnvironment.dist == Dist.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
+                     ThreadPriorityPresets.LOW
+             );
  
-@@ -109,7 +109,7 @@ public class ModuleEntryPoint {
+@@ -182,7 +182,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
 -                        .setVariable("is_client", FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? 1 : 0)
 +                        .setVariable("is_client", FMLEnvironment.dist == Dist.CLIENT ? 1 : 0)
-                         .setVariable("cpus", Runtime.getRuntime().availableProcessors())
-                         .setVariable("mem_gb", Runtime.getRuntime().maxMemory() / 1024.0 / 1024.0 / 1024.0)
-                         .evaluate()
+                         .setVariable("cpus", availableProcessors)
+                         .setVariable("cores", coreCount)
+                         .setVariable("is_smt_probably_enabled", availableProcessors > coreCount ? 1 : 0)
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 index a2783592..b8e36281 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
@@ -278,7 +287,7 @@ index f21ae712..b09f4042 100644
          if (!isEnabled) {
              LOGGER.info("Disabling {}", mixinPackage);
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
-index 620c1556..8e437e5b 100644
+index 996e5284..96ccc5e4 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/common/config/ConfigSystem.java
 @@ -27,11 +27,16 @@ package com.ishland.c2me.base.common.config;
