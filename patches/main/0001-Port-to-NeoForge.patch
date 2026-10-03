@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 51a8d147..679f0057 100644
+index 1e346b53..d41e2c40 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -58,7 +58,7 @@ configure(allprojects) {
@@ -34,21 +34,7 @@ index 51a8d147..679f0057 100644
          def lwjglCentral = mavenCentral {
              content {
                  includeGroup "org.lwjgl"
-@@ -119,29 +120,34 @@ allprojects {
-                 }
-             }
-         }
-+        maven {
-+            name = "Maven for PR #3403" // https://github.com/neoforged/NeoForge/pull/3403
-+            url = uri("https://prmaven.neoforged.net/NeoForge/pr3403")
-+            content {
-+                includeModule("net.neoforged", "neoforge")
-+                includeModule("net.neoforged", "testframework")
-+            }
-+        }
-     }
- }
- 
+@@ -125,23 +126,20 @@ allprojects {
  configure (allprojects - project(":tests")) {
      if (project != project(":") && project.parent != project(":")) return
  
@@ -78,7 +64,7 @@ index 51a8d147..679f0057 100644
      remapJar {
          addNestedDependencies = true
      }
-@@ -174,7 +180,7 @@ configure (allprojects - project(":tests")) {
+@@ -174,7 +172,7 @@ configure (allprojects - project(":tests")) {
      processResources {
          inputs.property "version", version + "+" + minecraft_version
  
@@ -87,7 +73,7 @@ index 51a8d147..679f0057 100644
              expand "version": version + "+" + minecraft_version
          }
      }
-@@ -215,11 +221,11 @@ configure (allprojects - project(":tests")) {
+@@ -215,11 +213,11 @@ configure (allprojects - project(":tests")) {
  configure (allprojects - project(":tests")) {
      dependencies {
          implementation "com.ibm.async:asyncutil:${async_util_version}"
@@ -101,7 +87,7 @@ index 51a8d147..679f0057 100644
          api "com.ishland.flowsched:flowsched"
  
          // workaround loom issue for devlaunch
-@@ -234,11 +240,9 @@ configure (allprojects - project(":tests")) {
+@@ -234,11 +232,9 @@ configure (allprojects - project(":tests")) {
  
          if (project == rootProject) {
              include implementation("com.ibm.async:asyncutil:${async_util_version}")
@@ -114,7 +100,7 @@ index 51a8d147..679f0057 100644
              include "io.reactivex.rxjava3:rxjava:${rxjava_version}"
              include "org.reactivestreams:reactive-streams:${reactive_streams_version}"
              include implementation("com.github.ben-manes.caffeine:caffeine:${caffeine_version}")
-@@ -247,7 +251,6 @@ configure (allprojects - project(":tests")) {
+@@ -247,7 +243,6 @@ configure (allprojects - project(":tests")) {
          testImplementation platform("org.junit:junit-bom:${junit_version}")
          testImplementation 'org.junit.jupiter:junit-jupiter'
          testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -122,7 +108,7 @@ index 51a8d147..679f0057 100644
      }
  
      test {
-@@ -371,6 +374,7 @@ dependencies {
+@@ -371,6 +366,7 @@ dependencies {
  String getVersionSuffix() {
      def stdout = providers.exec {
          commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
@@ -835,10 +821,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index 4e55e07f..4f0f4235 100644
+index c71abfb5..2ab9f3f5 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -63,16 +63,16 @@
+@@ -65,16 +65,16 @@
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
      "access.IXoroshiro128PlusPlusRandomSplitter",
@@ -2069,7 +2055,7 @@ index 00000000..e54eab96
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
-index 020d6044..93352f20 100644
+index 9f7f560a..6340b13b 100644
 --- a/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 +++ b/c2me-opts-allocs/src/main/resources/c2me-opts-allocs.mixins.json
 @@ -5,8 +5,6 @@
@@ -2080,7 +2066,7 @@ index 020d6044..93352f20 100644
 -    "MixinNbtCompound1",
      "MixinNbtList",
      "MixinUtil",
-     "object_pooling_caching.MixinOreFeature",
+     "object_pooling_caching.MixinChunkGenerator",
 diff --git a/c2me-opts-allocs/src/main/resources/fabric.mod.json b/c2me-opts-allocs/src/main/resources/fabric.mod.json
 deleted file mode 100644
 index cb2dcf73..00000000
@@ -2486,7 +2472,7 @@ index 9889ea15..00000000
 -  }
 -}
 diff --git a/c2me-opts-natives-math/build.gradle b/c2me-opts-natives-math/build.gradle
-index 8581b449..2cf71556 100644
+index e4e66d60..be403653 100644
 --- a/c2me-opts-natives-math/build.gradle
 +++ b/c2me-opts-natives-math/build.gradle
 @@ -4,6 +4,14 @@ moduleDependencies(project, [
@@ -3887,7 +3873,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index fbc55ddf..6e13f033 100644
+index 2ae93f42..b19fbbc5 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
@@ -3903,7 +3889,7 @@ index fbc55ddf..6e13f033 100644
 -loader_version=0.19.5
 -fabric_version=0.158.2+26.3
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.2.0.200-pr-3403-port-26.3
++forge_version=26.3.0.45-beta
 +yarn_mappings_patch_neoforge_version=26.3+build.6
  # Mod Properties
  mod_version=0.4.2-alpha.0
@@ -3911,7 +3897,7 @@ index fbc55ddf..6e13f033 100644
 -archives_base_name=c2me-fabric
 +archives_base_name=c2me-neoforge
  # Publishing metadtaa
- curseforge_minecraft_versions=26.1-snapshot
+ curseforge_minecraft_versions=26.3
  # Java Dependencies
  async_util_version=0.1.0
 -night_config_version=3.6.5
