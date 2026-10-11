@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 00:30:21 +0800
+Subject: [PATCH] change: enable useLegacyScheduling
+
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+index 1ddfd92b..2ed84fe2 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
+@@ -114,7 +114,7 @@ public class Config {
+                     
+                     This is currently deprecated and will be removed in the future.
+                     """)
+-            .getBoolean(false, false);
++            .getBoolean(true, false);
+ 
+     public static final boolean lowMemoryMode = new ConfigSystem.ConfigAccessor()
+             .key("chunkSystem.lowMemoryMode")
