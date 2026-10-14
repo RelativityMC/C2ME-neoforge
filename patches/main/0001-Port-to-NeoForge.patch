@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 1e346b53..d41e2c40 100644
+index 2e484de2..e9892842 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -58,7 +58,7 @@ configure(allprojects) {
@@ -3873,7 +3873,7 @@ index 5a092ec9..00000000
 -  }
 -}
 diff --git a/gradle.properties b/gradle.properties
-index 2ae93f42..b19fbbc5 100644
+index 2ae93f42..cb2d8768 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -10,22 +10,23 @@ gradle-curseforge-publish.interop.neogradle=false
@@ -3889,7 +3889,7 @@ index 2ae93f42..b19fbbc5 100644
 -loader_version=0.19.5
 -fabric_version=0.158.2+26.3
 +# neoforge version, latest version can be found on https://projects.neoforged.net/neoforged/neoforge
-+forge_version=26.3.0.45-beta
++forge_version=26.3.0.77
 +yarn_mappings_patch_neoforge_version=26.3+build.6
  # Mod Properties
  mod_version=0.4.2-alpha.0
