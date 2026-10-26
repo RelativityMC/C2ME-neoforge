@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ishland <30385023+ishland@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 19:59:03 +0800
+Subject: [PATCH] new: invokeChunkTicketLevelUpdated stub for neoforge
+
+(cherry picked from commit 8f433bae7251712565403f183103ed7aa935f80b)
+
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+index 90307d7e..c0bc8fc0 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/TheChunkSystem.java
+@@ -28,6 +28,7 @@ import com.ishland.c2me.base.common.scheduler.IVanillaChunkManager;
+ import com.ishland.c2me.base.common.scheduler.SchedulingManager;
+ import com.ishland.c2me.base.mixin.access.IThreadedAnvilChunkStorage;
+ import com.ishland.c2me.base.mixin.access.IVersionedChunkStorage;
++import com.ishland.c2me.rewrites.chunksystem.common.fapi.LifecycleEventInvoker;
+ import com.ishland.c2me.rewrites.chunksystem.common.structs.ChunkSystemExecutors;
+ import com.ishland.flowsched.scheduler.ExceptionHandlingAction;
+ import com.ishland.flowsched.scheduler.ItemHolder;
+@@ -151,8 +152,11 @@ public class TheChunkSystem extends StatusAdvancingScheduler<ChunkPos, ChunkStat
+ 
+     public ChunkHolder vanillaIf$setLevel(long pos, int level) {
+         assert !Thread.holdsLock(this.managedTickets);
++        final int oldLevel;
++        final ChunkHolder ret;
++
+         synchronized (this.managedTickets) {
+-            final int oldLevel = this.managedTickets.put(pos, level);
++            oldLevel = this.managedTickets.put(pos, level);
+             NewChunkStatus oldStatus = c2me$getDeferredStatusFromVanillaLevel(oldLevel);
+             NewChunkStatus newStatus = c2me$getDeferredStatusFromVanillaLevel(level);
+             final ChunkPos key = new ChunkPos(pos);
+@@ -178,7 +182,7 @@ public class TheChunkSystem extends StatusAdvancingScheduler<ChunkPos, ChunkStat
+                 if (oldStatus != this.getUnloadedStatus()) {
+                     this.removeTicket(key, TicketTypeExtension.VANILLA_LEVEL, key, oldStatus);
+                 }
+-                return shouldReturnVanillaHolder ? vanillaHolder : null;
++                ret = shouldReturnVanillaHolder ? vanillaHolder : null;
+             } else {
+                 final ItemHolder<ChunkPos, ChunkState, ChunkLoadingContext, NewChunkHolderVanillaInterface> holder = this.getHolder(key);
+                 NewChunkHolderVanillaInterface vanillaHolder;
+@@ -192,11 +196,16 @@ public class TheChunkSystem extends StatusAdvancingScheduler<ChunkPos, ChunkStat
+                     vanillaHolder.updateDeferredStatus(NewChunkStatus.fromVanillaLevel(level));
+                 }
+                 if (newStatus != this.getUnloadedStatus() && vanillaHolder != null) {
+-                    return vanillaHolder;
++                    ret = vanillaHolder;
++                } else {
++                    ret = null;
+                 }
+-                return null;
+             }
+         }
++
++        LifecycleEventInvoker.invokeChunkTicketLevelUpdated(((IThreadedAnvilChunkStorage) this.tacs).getWorld(), pos, oldLevel, level, ret);
++
++        return ret;
+     }
+ 
+     private static NewChunkStatus c2me$getDeferredStatusFromVanillaLevel(int level) {
+diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
+index 49c0d50d..37fb3382 100644
+--- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
++++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
+@@ -24,11 +24,13 @@
+ 
+ package com.ishland.c2me.rewrites.chunksystem.common.fapi;
+ 
++import net.minecraft.server.world.ChunkHolder;
+ import net.minecraft.server.world.ChunkLevelType;
+ import net.minecraft.server.world.ServerWorld;
+ import net.minecraft.world.chunk.WorldChunk;
+ import net.neoforged.neoforge.common.NeoForge;
+ import net.neoforged.neoforge.event.level.ChunkEvent;
++import org.jspecify.annotations.Nullable;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -62,4 +64,8 @@ public class LifecycleEventInvoker {
+         // no-op
+     }
+ 
++    public static void invokeChunkTicketLevelUpdated(ServerWorld world, long pos, int oldTicketLevel, int newTicketLevel, @Nullable ChunkHolder chunkHolder) {
++        // stub for neoforge
++    }
++
+ }
