@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dexter Reed <dreed4470@proton.me>
+Date: Wed, 28 Oct 2026 01:33:40 +0000
+Subject: [PATCH] fix: iris version not being detected properly (NeoForge)
+
+
+diff --git a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/ModuleEntryPoint.java b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/ModuleEntryPoint.java
+index 9ba2478a..51b6ae73 100644
+--- a/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/ModuleEntryPoint.java
++++ b/c2me-client-uncapvd/src/main/java/com/ishland/c2me/client/uncapvd/ModuleEntryPoint.java
+@@ -33,7 +33,7 @@ public class ModuleEntryPoint {
+             .key("clientSideConfig.modifyMaxVDConfig.enabled")
+             .comment("Whether to modify maximum view distance")
+             .incompatibleMod("bobby", "*")
+-            .incompatibleMod("iris", "<1.10.2")
++            .incompatibleMod("iris", "(,1.10.2)")
+             .getBoolean(true, false);
+ 
+     static {
