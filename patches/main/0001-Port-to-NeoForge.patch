@@ -5,7 +5,7 @@ Subject: [PATCH] Port to NeoForge
 
 
 diff --git a/build.gradle b/build.gradle
-index 2e484de2..e9892842 100644
+index c17aba9a..37484d6c 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -58,7 +58,7 @@ configure(allprojects) {
@@ -185,7 +185,7 @@ index cee699a1..15ce18f1 100644
 +
  }
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
-index bb40d526..25c70baf 100644
+index 1ebd366b..15f9c334 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/ModuleEntryPoint.java
 @@ -27,8 +27,8 @@ package com.ishland.c2me.base;
@@ -199,14 +199,18 @@ index bb40d526..25c70baf 100644
  import net.objecthunter.exp4j.ExpressionBuilder;
  import net.objecthunter.exp4j.function.Function;
  import org.slf4j.Logger;
-@@ -101,22 +101,10 @@ public class ModuleEntryPoint {
+@@ -104,7 +104,7 @@ public class ModuleEntryPoint {
                      """)
              .getEnum(
                      ThreadPriorityPresets.class,
--                    FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
-+                    FMLEnvironment.getDist() == Dist.CLIENT ? ThreadPriorityPresets.LOW : ThreadPriorityPresets.BELOW_NORMAL,
-                     ThreadPriorityPresets.LOW
+-                    FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT ? ThreadPriorityPresets.LOWER : ThreadPriorityPresets.BELOW_NORMAL,
++                    FMLEnvironment.getDist() == Dist.CLIENT ? ThreadPriorityPresets.LOWER : ThreadPriorityPresets.BELOW_NORMAL,
+                     ThreadPriorityPresets.LOWER
              );
+ 
+@@ -119,18 +119,6 @@ public class ModuleEntryPoint {
+                     """)
+             .getBoolean(true, false);
  
 -    public static final boolean disableLoggingShutdownHook = new ConfigSystem.ConfigAccessor()
 -            .key("fixes.disableLoggingShutdownHook")
@@ -223,7 +227,7 @@ index bb40d526..25c70baf 100644
      public static final int defaultParallelism;
  
      private static int fetchedCoreCount = -1;
-@@ -182,7 +170,7 @@ public class ModuleEntryPoint {
+@@ -196,7 +184,7 @@ public class ModuleEntryPoint {
                          .build()
                          .setVariable("is_windows", PlatformDependent.isWindows() ? 1 : 0)
                          .setVariable("is_j9vm", PlatformDependent.isJ9Jvm() ? 1 : 0)
@@ -233,7 +237,7 @@ index bb40d526..25c70baf 100644
                          .setVariable("cores", coreCount)
                          .setVariable("is_smt_probably_enabled", availableProcessors > coreCount ? 1 : 0)
 diff --git a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
-index a2783592..b8e36281 100644
+index ddccf32e..0be7112a 100644
 --- a/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 +++ b/c2me-base/src/main/java/com/ishland/c2me/base/TheMixinPlugin.java
 @@ -38,9 +38,6 @@ public final class TheMixinPlugin extends ModuleMixinPlugin {
@@ -821,10 +825,10 @@ index 00000000..76bac433
 +ordering = "NONE"
 +side = "BOTH"
 diff --git a/c2me-base/src/main/resources/c2me-base.mixins.json b/c2me-base/src/main/resources/c2me-base.mixins.json
-index c71abfb5..2ab9f3f5 100644
+index 8bff3a7e..8dcc3ff7 100644
 --- a/c2me-base/src/main/resources/c2me-base.mixins.json
 +++ b/c2me-base/src/main/resources/c2me-base.mixins.json
-@@ -65,16 +65,16 @@
+@@ -66,16 +66,16 @@
      "access.IXoroshiro128PlusPlusRandomDeriver",
      "access.IXoroshiro128PlusPlusRandomImpl",
      "access.IXoroshiro128PlusPlusRandomSplitter",
@@ -844,7 +848,7 @@ index c71abfb5..2ab9f3f5 100644
 +    "network.MixinClientCommonNetworkHandler"
    ],
    "client": [
-     "exp_warning.MixinMinecraftClient"
+     "client.priority.MixinMinecraftClient",
 diff --git a/c2me-base/src/main/resources/c2me.mixins.json b/c2me-base/src/main/resources/c2me.mixins.json
 index ba7b34b5..27b2734c 100644
 --- a/c2me-base/src/main/resources/c2me.mixins.json
@@ -3085,7 +3089,7 @@ index 11104c69..4f5ad227 100644
 +    }
 +}
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
-index a5e77df5..9e1089da 100644
+index 1ee2381b..de095966 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/Config.java
 @@ -134,7 +134,7 @@ public class Config {
@@ -3095,8 +3099,8 @@ index a5e77df5..9e1089da 100644
 -            .getBoolean(false, false);
 +            .getBoolean(true, false);
  
-     public static void init() {
-         // intentionally empty
+     public static final boolean crashEagerlyOnError = new ConfigSystem.ConfigAccessor()
+             .key("chunkSystem.crashEagerlyOnError")
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
 index 8e2bce5c..8f5aeefd 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/compat/lithium/LithiumChunkStatusTrackerInvoker.java
@@ -3151,24 +3155,25 @@ index 8e2bce5c..8f5aeefd 100644
          if (MH_onChunkInaccessible != null) {
              try {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-index 7a79c5c9..d86a30a0 100644
+index c4f46ac3..ca591b82 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
 +++ b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/fapi/LifecycleEventInvoker.java
-@@ -24,11 +24,11 @@
+@@ -24,12 +24,12 @@
  
  package com.ishland.c2me.rewrites.chunksystem.common.fapi;
  
 -import com.ishland.c2me.base.mixin.access.fapi.IArrayBackedEvent;
 -import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+ import net.minecraft.server.world.ChunkHolder;
  import net.minecraft.server.world.ChunkLevelType;
  import net.minecraft.server.world.ServerWorld;
  import net.minecraft.world.chunk.WorldChunk;
 +import net.neoforged.neoforge.common.NeoForge;
 +import net.neoforged.neoforge.event.level.ChunkEvent;
+ import org.jspecify.annotations.Nullable;
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
- 
-@@ -38,10 +38,7 @@ public class LifecycleEventInvoker {
+@@ -40,10 +40,7 @@ public class LifecycleEventInvoker {
  
      public static void invokeChunkLoaded(ServerWorld world, WorldChunk chunk, boolean newChunk) {
          try {
@@ -3180,7 +3185,7 @@ index 7a79c5c9..d86a30a0 100644
          } catch (Throwable t) {
              LOGGER.error("Failed to invoke chunk load event (world={}, pos={}, newChunk={})", world, chunk.getPos(), newChunk, t);
          }
-@@ -49,7 +46,7 @@ public class LifecycleEventInvoker {
+@@ -51,7 +48,7 @@ public class LifecycleEventInvoker {
  
      public static void invokeChunkUnload(ServerWorld world, WorldChunk chunk) {
          try {
@@ -3189,7 +3194,7 @@ index 7a79c5c9..d86a30a0 100644
          } catch (Throwable t) {
              LOGGER.error("Failed to invoke chunk unload event (world={}, pos={})", world, chunk.getPos(), t);
          }
-@@ -58,33 +55,11 @@ public class LifecycleEventInvoker {
+@@ -60,33 +57,11 @@ public class LifecycleEventInvoker {
      private static boolean cachedNeedsInvokeChunkLevelTypeChange = false;
  
      public static boolean needsInvokeChunkLevelTypeChange() {
@@ -3224,7 +3229,7 @@ index 7a79c5c9..d86a30a0 100644
 +        // noop
      }
  
- }
+     public static void invokeChunkTicketLevelUpdated(ServerWorld world, long pos, int oldTicketLevel, int newTicketLevel, @Nullable ChunkHolder chunkHolder) {
 diff --git a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java b/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
 index 0e87d65b..47d52c7d 100644
 --- a/c2me-rewrites-chunk-system/src/main/java/com/ishland/c2me/rewrites/chunksystem/common/statuses/ReadFromDisk.java
